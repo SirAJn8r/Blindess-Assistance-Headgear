@@ -14,7 +14,7 @@
 #define centerLidarPower 32
 #define rightLidarPower 34
 
-#define maxDistance 6 // # of Meters away where it outputs 0
+#define maxDistance 600 // After maxDistance (cm), no buzzer/vibration output
 #define scalar 0.8 // Outermost bucket = 20%, 2nd is outer 20% of remaining, etc.
 #define numBuckets 16 // Number of buckets to categorize distance into
 
@@ -72,8 +72,7 @@ void loop()
     //digitalWrite(leftLidarPower, LOW);
     //digitalWrite(centerLidarPower, HIGH);
     //digitalWrite(rightLidarPower, LOW);
-    if (tfl.getData(tfDist, leftTFL)){
-      if(tfDist > 600) tfDist = 600;
+    if (tfl.getData(tfDist, leftTFL)) {
       distL = tfDist;
       //Serial.print("  left: ");
       //Serial.print(tfDist);
@@ -82,20 +81,17 @@ void loop()
     //digitalWrite(leftLidarPower, LOW);
     //digitalWrite(centerLidarPower, HIGH);
     //digitalWrite(rightLidarPower, LOW);
-    if (tfl.getData(tfDist, centerTFL))
-      {
-        if(tfDist > 600) tfDist = 600;
+    if (tfl.getData(tfDist, centerTFL)) {
         distC = tfDist;
         //Serial.print("\tcenter: ");
         //Serial.print(tfDist);
       }
   } else {
-    digitalWrite(LED_BUILTIN, HIGH);
+    // digitalWrite(LED_BUILTIN, HIGH);
     //digitalWrite(leftLidarPower, LOW);
     //digitalWrite(centerLidarPower, HIGH);
     //digitalWrite(rightLidarPower, LOW);
-    if (tfl.getData(tfDist, rightTFL)){
-      if(tfDist > 300) tfDist = 300;
+    if (tfl.getData(tfDist, rightTFL)) {
       distR = tfDist;
       //Serial.print("\tright: ");
       //Serial.print(tfDist);
@@ -120,6 +116,7 @@ void loop()
     analogWrite(rightBuz, map(bucketize(distR), 0, 15, 0, 255));
     foundClosePoint = true;
   }
+  /*
   if (!foundClosePoint){
     int distAvg = (distL + distC + distR) / 3;
     int distAUL = distAvg * (distAvg * 0.2);
@@ -141,7 +138,7 @@ void loop()
     } else {
       digitalWrite(rightBuz, LOW);
     }
-  }
+  }*/
   if (!foundClosePoint){
     analogWrite(leftBuz, map(bucketize(distL), 0, 15, 0, 255)));
     analogWrite(centerBuz, map(bucketize(distC), 0, 15, 0, 255)));

@@ -17,21 +17,6 @@
 // Focus on 1 distance if it this factor closer than either other distance
 #define closenessFocusFactor 0.5
 
-/* Currently Unused 
-#define leftLidarPower 30 // power pin for left lidar
-#define centerLidarPower 32 // power pin for center lidar
-#define rightLidarPower 34 // power pin for right lidar
-unsigned long timerLeft = 0;
-unsigned long timerCenter = 0;
-unsigned long timerRight = 0;
-int intervalLeft = 2000;
-int intervalCenter = 2000;
-int intervalRight = 2000;
-const int vibeTimeLeft = 50;
-const int vibeTimeCenter = 50;
-const int vibeTimeRight = 50;
- End Currently Unused */
-
 TFLI2C tfl;
 int16_t tfDist;
 int distL, distC, distR;
@@ -49,15 +34,13 @@ void setup()
   pinMode(centerBuz, OUTPUT);
   pinMode(rightBuz, OUTPUT);
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  interrupts();
+  //pinMode(LED_BUILTIN, OUTPUT);
 }
 
 
 void loop()
 {
   unsigned long millisS = millis();
-  interrupts();
   //Serial.println(intervalLeft);
   //Serial.println(intervalCenter);
   //Serial.println(intervalRight);
@@ -67,29 +50,20 @@ void loop()
   if (millisS - getDataTimer > 99){
     getDataTimer = millisS;
   } else if (millisS - getDataTimer > 66){
-    digitalWrite(LED_BUILTIN, LOW);
-    //digitalWrite(leftLidarPower, LOW);
-    //digitalWrite(centerLidarPower, HIGH);
-    //digitalWrite(rightLidarPower, LOW);
+    // digitalWrite(LED_BUILTIN, LOW);
     if (tfl.getData(tfDist, leftTFL)) {
       distL = tfDist;
       //Serial.print("  left: ");
       //Serial.print(tfDist);
     }
   } else if (millisS - getDataTimer > 33){
-    //digitalWrite(leftLidarPower, LOW);
-    //digitalWrite(centerLidarPower, HIGH);
-    //digitalWrite(rightLidarPower, LOW);
     if (tfl.getData(tfDist, centerTFL)) {
-        distC = tfDist;
-        //Serial.print("\tcenter: ");
-        //Serial.print(tfDist);
-      }
+      distC = tfDist;
+      //Serial.print("\tcenter: ");
+      //Serial.print(tfDist);
+    }
   } else {
     // digitalWrite(LED_BUILTIN, HIGH);
-    //digitalWrite(leftLidarPower, LOW);
-    //digitalWrite(centerLidarPower, HIGH);
-    //digitalWrite(rightLidarPower, LOW);
     if (tfl.getData(tfDist, rightTFL)) {
       distR = tfDist;
       //Serial.print("\tright: ");
@@ -143,51 +117,6 @@ void loop()
     analogWrite(centerBuz, map(bucketize(distC), 0, 15, 0, 255));
     analogWrite(rightBuz, map(bucketize(distR), 0, 15, 0, 255));
   }
-/*
-  if (distL < distR && distL < distC){ // left is closest
-    analogWrite(leftBuz, map(tfDist, 0, 600, 255, 0));
-    digitalWrite(centerBuz, LOW);
-    digitalWrite(rightBuz, LOW);
-  } else if (distC < distR && distC < distL) { // center is closest
-    analogWrite(centerBuz, map(tfDist, 0, 600, 255, 0));
-    digitalWrite(leftBuz, LOW);
-    digitalWrite(rightBuz, LOW);
-  } else { // right is closest
-    analogWrite(rightBuz, map(tfDist, 0, 600, 255, 0));
-    digitalWrite(centerBuz, LOW);
-    digitalWrite(leftBuz, LOW);
-  }
-  /*
-  Serial.println();
-  interrupts();
-  if (millisS - (timerLeft) > intervalLeft){
-    timerLeft = millis();
-  }
-  if (millisS - (timerCenter) > intervalCenter){
-    timerCenter = millis();
-  }
-  if (millisS - (timerRight) > intervalRight){
-    timerRight = millis();
-  }
-  interrupts();
-  
-  if (millisS - timerLeft < vibeTimeLeft){
-    analogWrite(leftBuz, 210);
-  } else {
-    analogWrite(leftBuz, 0);
-  }
-  if (millisS - timerCenter < vibeTimeCenter){
-    analogWrite(centerBuz, 210);
-  } else {
-    analogWrite(centerBuz, 0);
-  }
-  if (millisS - timerRight < vibeTimeRight){
-    analogWrite(rightBuz, 210);
-  } else {
-    analogWrite(rightBuz, 0);
-  }
-  interrupts();
-  */
 }
 
 /* Bucketing group distances 0 - maxDistance into numBuckets buckets, larger being further 

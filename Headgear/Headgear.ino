@@ -2,17 +2,13 @@
 #include <Wire.h>
 #include <TFLI2C.h>
 
-#define leftTFL 0x12
-#define centerTFL 0x11
-#define rightTFL 0x10
+#define leftTFL 0x12 // I2C address of left TF-Luna
+#define centerTFL 0x11 // I2C address of center TF-Luna
+#define rightTFL 0x10 // I2C address of right TF-Luna
 
-#define leftBuz 4
-#define centerBuz 5
-#define rightBuz 6
-
-#define leftLidarPower 30
-#define centerLidarPower 32
-#define rightLidarPower 34
+#define leftBuz 4 // pin for left-side buzzer
+#define centerBuz 5 // pin for center buzzer
+#define rightBuz 6 // pin for right buzzer
 
 #define maxDistance 600 // After maxDistance (cm), no buzzer/vibration output
 #define scalar 0.8 // Outermost bucket = 20%, 2nd is outer 20% of remaining, etc.
@@ -21,28 +17,31 @@
 // Focus on 1 distance if it this factor closer than either other distance
 #define closenessFocusFactor 0.5
 
+/* Currently Unused 
+#define leftLidarPower 30 // power pin for left lidar
+#define centerLidarPower 32 // power pin for center lidar
+#define rightLidarPower 34 // power pin for right lidar
 unsigned long timerLeft = 0;
 unsigned long timerCenter = 0;
 unsigned long timerRight = 0;
-
 int intervalLeft = 2000;
 int intervalCenter = 2000;
 int intervalRight = 2000;
-
 const int vibeTimeLeft = 50;
 const int vibeTimeCenter = 50;
 const int vibeTimeRight = 50;
+ End Currently Unused */
 
-unsigned long getDataTimer = 0;
-
-int distL = 0;
-int distC = 0;
-int distR = 0;
 TFLI2C tfl;
 int16_t tfDist;
+int distL, distC, distR;
+unsigned long getDataTimer;
 
 void setup()
 {
+  distL = distC = distR = 0;
+  getDataTimer = 0;
+
   //Serial.begin(9600);
   Wire.begin();
 
@@ -140,9 +139,9 @@ void loop()
     }
   }*/
   if (!foundClosePoint){
-    analogWrite(leftBuz, map(bucketize(distL), 0, 15, 0, 255)));
-    analogWrite(centerBuz, map(bucketize(distC), 0, 15, 0, 255)));
-    analogWrite(rightBuz, map(bucketize(distR), 0, 15, 0, 255)));
+    analogWrite(leftBuz, map(bucketize(distL), 0, 15, 0, 255));
+    analogWrite(centerBuz, map(bucketize(distC), 0, 15, 0, 255));
+    analogWrite(rightBuz, map(bucketize(distR), 0, 15, 0, 255));
   }
 /*
   if (distL < distR && distL < distC){ // left is closest
@@ -191,7 +190,8 @@ void loop()
   */
 }
 
-/* Groups the given distance (meters) into buckets 0-15, 15 being furthest 
+/* Bucketing group distances 0 - maxDistance into numBuckets buckets, larger being further 
+ * Find the bucket of a given distance
  */
 uint8_t bucketize(float dist) {
     uint8_t bucket = numBuckets - 1;

@@ -19,7 +19,7 @@
 #define numBuckets 16 // Number of buckets to categorize distance into
 
 // Focus on 1 distance if it is much closer than either other distance
-#define singleClose(dist, distA, distB) ((dist < distA * 0.5) && (dist < distB * 0.5))
+#define singleClose(dist, distA, distB) ((dist < maxDistance / 4) && (dist < distA * 0.5) && (dist < distB * 0.5))
 
 enum ActiveMode{
   off = 0,
@@ -39,6 +39,7 @@ enum ActuatorMode {
 typedef struct{
   uint8_t vib;
   uint8_t buz;
+  float modifier;
 }actuatorSet;
 
 int16_t tfDist, distL, distC, distR;
@@ -63,14 +64,16 @@ void setup()
   rightSet.vib = rightVib;
   rightSet.buz = rightBuz;
 
+  leftSet.modifier = .35;
+  centerSet.modifier = .55;
+  rightSet.modifier = 1;
+
   //Serial.begin(9600);
   Wire.begin();
 
   pinMode(leftVib, OUTPUT);
   pinMode(centerVib, OUTPUT);
   pinMode(rightVib, OUTPUT);
-
-  //pinMode(LED_BUILTIN, OUTPUT);
 }
 
 void loop()
@@ -79,87 +82,12 @@ void loop()
     case off:
       break;
     case distance:
-      oldDistance();
+      runDistance();
       break;
     case photocell:
       break;
     case compass:
       break;
-  }
-}
-
-void oldDistance() {
-  
-  unsigned long millisS = millis();
-
-  // Collect distance data only from whoever's turn it is
-  if (millisS - getDataTimer > 99){
-    getDataTimer = millisS;
-  } else if (millisS - getDataTimer > 66){
-    if (tfl.getData(tfDist, leftTFL)) {
-      distL = tfDist;
-      //Serial.print("  left: ");
-      //Serial.print(distL);
-    }
-  } else if (millisS - getDataTimer > 33){
-    if (tfl.getData(tfDist, centerTFL)) {
-      distC = tfDist;
-      //Serial.print("\tcenter: ");
-      //Serial.print(distC);
-    }
-  } else {
-    if (tfl.getData(tfDist, rightTFL)) {
-      distR = tfDist;
-      //Serial.print("\tright: ");
-      //Serial.print(distR);
-    }
-  }
-
-  // If one is much closer than the other 2, focus on that distance sensor
-  bool foundClosePoint = false;
-  if (singleClose(distL, distC, distR)) { // left is closest
-    analogWrite(leftVib, map(bucketize(distL), 0, 15, 0, 255));
-    digitalWrite(centerVib, LOW);
-    digitalWrite(rightVib, LOW);
-    foundClosePoint = true;
-  } else if (singleClose(distC, distL, distR)) { // center is closest
-    digitalWrite(leftVib, LOW);
-    analogWrite(centerVib, map(bucketize(distC), 0, 15, 0, 255));
-    digitalWrite(rightVib, LOW);
-    foundClosePoint = true;
-  } else if (singleClose(distR, distL, distC)) { // right is closest
-    digitalWrite(leftVib, LOW);
-    digitalWrite(centerVib, LOW);
-    analogWrite(rightVib, map(bucketize(distR), 0, 15, 0, 255));
-    foundClosePoint = true;
-  }
-  /*
-  if (!foundClosePoint){
-    int distAvg = (distL + distC + distR) / 3;
-    int distAUL = distAvg * (distAvg * 0.2);
-    if (distL < distAUL){
-      analogWrite(leftVib, map(bucketize(distL), 0, 15, 0, 255)));
-      foundClosePoint = true;
-    } else {
-      digitalWrite(leftVib, LOW);
-    }
-    if (distC < distAUL){
-      analogWrite(centerVib, map(bucketize(distC), 0, 15, 0, 255)));
-      foundClosePoint = true;
-    } else {
-      digitalWrite(centerVib, LOW);
-    }
-    if (distR < distAUL){
-      analogWrite(rightVib, map(bucketize(distR), 0, 15, 0, 255)));
-      foundClosePoint = true;
-    } else {
-      digitalWrite(rightVib, LOW);
-    }
-  } */
-  if (!foundClosePoint){
-    analogWrite(leftVib, map(bucketize(distL), 0, 15, 0, 255));
-    analogWrite(centerVib, map(bucketize(distC), 0, 15, 0, 255));
-    analogWrite(rightVib, map(bucketize(distR), 0, 15, 0, 255));
   }
 }
 
@@ -204,14 +132,14 @@ void actuateOutput(uint8_t output, actuatorSet actSet) {
     case none:
       break;
     case vibration:
-      analogWrite(actSet.vib, map(bucketize(output), 0, 15, 0, 255));
+      analogWrite(actSet.vib, (uint8_t)(actSet.modifier * map(bucketize(output), 15, 0, 0, 255)));
       break;
     case buzzer:
-      analogWrite(actSet.buz, map(bucketize(output), 0, 15, 0, 255));
+      analogWrite(actSet.buz, map(bucketize(output), 15, 0, 0, 255));
       break;
     case all:
-      analogWrite(actSet.vib, map(bucketize(output), 0, 15, 0, 255));
-      analogWrite(actSet.buz, map(bucketize(output), 0, 15, 0, 255));
+      analogWrite(actSet.vib, (uint8_t)(actSet.modifier * map(bucketize(output), 15, 0, 0, 255)));
+      analogWrite(actSet.buz, map(bucketize(output), 15, 0, 0, 255));
       break;
   }
 }

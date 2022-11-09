@@ -25,7 +25,7 @@ enum ActiveMode{
   off = 0,
   distance,
   photocell,
-  compass
+  compass,
 };
 
 enum ActuatorMode {
@@ -35,9 +35,8 @@ enum ActuatorMode {
   all,
 };
 
-// Stuff for output to a specific Vibration Motor/Buzzer pair
+// A specific Vibration Motor/Buzzer pair
 typedef struct{
-  uint8_t output;
   uint8_t vib;
   uint8_t buz;
 }actuatorSet;
@@ -74,9 +73,23 @@ void setup()
   //pinMode(LED_BUILTIN, OUTPUT);
 }
 
-
 void loop()
 {
+  switch(activeMode) {
+    case off:
+      break;
+    case distance:
+      oldDistance();
+      break;
+    case photocell:
+      break;
+    case compass:
+      break;
+  }
+}
+
+void oldDistance() {
+  
   unsigned long millisS = millis();
 
   // Collect distance data only from whoever's turn it is
@@ -86,19 +99,19 @@ void loop()
     if (tfl.getData(tfDist, leftTFL)) {
       distL = tfDist;
       //Serial.print("  left: ");
-      //Serial.print(tfDist);
+      //Serial.print(distL);
     }
   } else if (millisS - getDataTimer > 33){
     if (tfl.getData(tfDist, centerTFL)) {
       distC = tfDist;
       //Serial.print("\tcenter: ");
-      //Serial.print(tfDist);
+      //Serial.print(distC);
     }
   } else {
     if (tfl.getData(tfDist, rightTFL)) {
       distR = tfDist;
       //Serial.print("\tright: ");
-      //Serial.print(tfDist);
+      //Serial.print(distR);
     }
   }
 
@@ -142,35 +155,63 @@ void loop()
     } else {
       digitalWrite(rightVib, LOW);
     }
-  }
+  } */
   if (!foundClosePoint){
     analogWrite(leftVib, map(bucketize(distL), 0, 15, 0, 255));
     analogWrite(centerVib, map(bucketize(distC), 0, 15, 0, 255));
     analogWrite(rightVib, map(bucketize(distR), 0, 15, 0, 255));
-  }*/
-  if (!foundClosePoint){
-    leftSet.output = distL;
-    centerSet.output = distC;
-    rightSet.output = distR;
-    actuateOutput(leftSet);
-    actuateOutput(centerSet);
-    actuateOutput(rightSet);
   }
 }
 
-void actuateOutput(actuatorSet actSet) {
+void runDistance() {
+  unsigned long millisS = millis();
+
+  // Collect distance data only from whoever's turn it is
+  if (millisS - getDataTimer > 99) {
+    getDataTimer = millisS;
+
+  } else if (millisS - getDataTimer > 66) {
+    if(tfl.getData(distL, leftTFL)) 
+      actuateOutput(distL, leftSet);   
+
+  } else if (millisS - getDataTimer > 33) {
+    if(tfl.getData(distC, centerTFL))
+      actuateOutput(distC, centerSet);
+
+  } else {
+    if (tfl.getData(distR, rightTFL))
+      actuateOutput(distR, rightSet); 
+
+  }
+
+  // If one is way closer than the other two, focus on it exclusively
+  if (singleClose(distL, distC, distR)) {
+    actuateOutput(0, centerSet);
+    actuateOutput(0, rightSet);
+  } 
+  else if (singleClose(distC, distL, distR)) {
+    actuateOutput(0, leftSet);
+    actuateOutput(0, rightSet);
+  } 
+  else if (singleClose(distR, distL, distC)) {    
+    actuateOutput(0, leftSet);
+    actuateOutput(0, centerSet);
+  }
+}
+
+void actuateOutput(uint8_t output, actuatorSet actSet) {
   switch(actuatorMode) {
     case none:
       break;
     case vibration:
-      analogWrite(actSet.vib, map(bucketize(actSet.output), 0, 15, 0, 255));
+      analogWrite(actSet.vib, map(bucketize(output), 0, 15, 0, 255));
       break;
     case buzzer:
-      analogWrite(actSet.buz, map(bucketize(actSet.output), 0, 15, 0, 255));
+      analogWrite(actSet.buz, map(bucketize(output), 0, 15, 0, 255));
       break;
     case all:
-      analogWrite(actSet.vib, map(bucketize(actSet.output), 0, 15, 0, 255));
-      analogWrite(actSet.buz, map(bucketize(actSet.output), 0, 15, 0, 255));
+      analogWrite(actSet.vib, map(bucketize(output), 0, 15, 0, 255));
+      analogWrite(actSet.buz, map(bucketize(output), 0, 15, 0, 255));
       break;
   }
 }

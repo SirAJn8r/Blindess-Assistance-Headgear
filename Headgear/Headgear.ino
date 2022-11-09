@@ -20,16 +20,17 @@
 #define centerVibMod 0.55 // adjust center vibrator power
 #define rightVibMod 1 // adjust right vibrator power
 
+// Focus on distance(s) that are much closer than the other distance(s)
+#define closeFactor 0.5
+#define maxClose maxDistance / 4
+#define singleClose(dist, distA, distB) ((dist < maxClose) && (dist < distA * closeFactor) && (dist < distB * closeFactor))
+#define singleFar(dist, distA, distB) ((dist > maxClose) && (dist * closeFactor > distA) && (dist * closeFactor > distB))
+
 // Bucketing
 #define maxDistance 600 // After maxDistance (cm), no buzzer/vibration output
 #define scalar 0.8 // Outermost bucket = 20%, 2nd is outer 20% of remaining, etc.
 #define numBuckets 16 // Number of buckets to categorize distance into
 #define bucketMap(dist) map(bucketize(dist), 15, 0, 0, 255)
-
-// Focus on 1 distance if it is much closer than either other distance
-#define closeFactor 0.5
-#define maxClose maxDistance / 4
-#define singleClose(dist, distA, distB) ((dist < maxClose) && (dist < distA * closeFactor) && (dist < distB * closeFactor))
 
 // Photocell
 #define photocellPin A1 // pin for photocell sensor
@@ -76,7 +77,7 @@ Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(12345);
 
 void setup()
 {
-  distL = distC = distR = 0;
+  distL = distC = distR = maxDistance;
   getDataTimer = 0;
 
   activeMode = distance;
@@ -97,13 +98,13 @@ void setup()
   pinMode(rightVib, OUTPUT);
   pinMode(leftBuz, OUTPUT);
   pinMode(centerBuz, OUTPUT);
-  pinMode(centerBuz, OUTPUT);
+  pinMode(rightBuz, OUTPUT);
   pinMode(photocell, INPUT);
 
   Wire.begin();
 
   // while(!mag.begin()) ; // wait for mag to come online
-  mag.enableAutoRange(true);
+  // mag.enableAutoRange(true);
 }
 
 void loop()
@@ -156,6 +157,16 @@ void runDistance() {
   else if (singleClose(distR, distL, distC)) {    
     actuatorOutput(0, leftSet);
     actuatorOutput(0, centerSet);
+  } 
+  // If two are way close than the last one, focus on them exclusively
+  else if (singleFar(distL, distC, distR)) {
+    actuatorOutput(0, leftSet);
+  }
+  else if (singleFar(distC, distL, distR)) {
+    actuatorOutput(0, centerSet);
+  }
+  else if (singleFar(distR, distL, distC)) {
+    actuatorOutput(0, rightSet);
   }
 }
 

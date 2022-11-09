@@ -29,22 +29,23 @@ enum ActiveMode{
 };
 
 enum ActuatorMode {
-  vibration = 0,
+  none = 0,
+  vibration,
   buzzer,
   all,
-  none
 };
 
+// Stuff for output to a specific Vibration Motor/Buzzer pair
 typedef struct{
-  uint8_t distance;
+  uint8_t output;
   uint8_t vib;
   uint8_t buz;
 }actuatorSet;
 
-TFLI2C tfl;
-int16_t tfDist;
-int distL, distC, distR;
+int16_t tfDist, distL, distC, distR;
 unsigned long getDataTimer;
+
+TFLI2C tfl;
 ActiveMode activeMode;
 ActuatorMode actuatorMode;
 actuatorSet leftSet, centerSet, rightSet;
@@ -54,13 +55,13 @@ void setup()
   distL = distC = distR = 0;
   getDataTimer = 0;
   activeMode = distance;
-
   actuatorMode = vibration;
+  
   leftSet.vib = leftVib;
-  centerSet.vib = centerVib;
-  rightSet.vib = rightVib;
   leftSet.buz = leftBuz;
+  centerSet.vib = centerVib;
   centerSet.buz = centerBuz;
+  rightSet.vib = rightVib;
   rightSet.buz = rightBuz;
 
   //Serial.begin(9600);
@@ -141,27 +142,35 @@ void loop()
     } else {
       digitalWrite(rightVib, LOW);
     }
-  }*/
+  }
   if (!foundClosePoint){
     analogWrite(leftVib, map(bucketize(distL), 0, 15, 0, 255));
     analogWrite(centerVib, map(bucketize(distC), 0, 15, 0, 255));
     analogWrite(rightVib, map(bucketize(distR), 0, 15, 0, 255));
+  }*/
+  if (!foundClosePoint){
+    leftSet.output = distL;
+    centerSet.output = distC;
+    rightSet.output = distR;
+    actuateOutput(leftSet);
+    actuateOutput(centerSet);
+    actuateOutput(rightSet);
   }
 }
 
-void actuateDistance(actuatorSet actSet) {
+void actuateOutput(actuatorSet actSet) {
   switch(actuatorMode) {
+    case none:
+      break;
     case vibration:
-      analogWrite(actSet.vib, map(bucketize(actSet.distance), 0, 15, 0, 255));
+      analogWrite(actSet.vib, map(bucketize(actSet.output), 0, 15, 0, 255));
       break;
     case buzzer:
-      analogWrite(actSet.buz, map(bucketize(actSet.distance), 0, 15, 0, 255));
+      analogWrite(actSet.buz, map(bucketize(actSet.output), 0, 15, 0, 255));
       break;
     case all:
-      analogWrite(actSet.vib, map(bucketize(actSet.distance), 0, 15, 0, 255));
-      analogWrite(actSet.buz, map(bucketize(actSet.distance), 0, 15, 0, 255));
-      break;
-    case none:
+      analogWrite(actSet.vib, map(bucketize(actSet.output), 0, 15, 0, 255));
+      analogWrite(actSet.buz, map(bucketize(actSet.output), 0, 15, 0, 255));
       break;
   }
 }

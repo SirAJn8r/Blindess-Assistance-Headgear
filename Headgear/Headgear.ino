@@ -16,6 +16,7 @@
 #define centerVib 5 // pin for center vibration motor
 #define rightVib 6 // pin for right vibration motor
 
+// Vibration motor power adjustments if needed (don't go above 1)
 #define leftVibMod 0.35 // adjust left vibrator power
 #define centerVibMod 0.55 // adjust center vibrator power
 #define rightVibMod 1 // adjust right vibrator power

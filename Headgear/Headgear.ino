@@ -14,12 +14,16 @@
 #define centerBuz 8 // pin for center buzzer
 #define rightBuz 9 // pin for right buzzer
 
+// Bucketing
 #define maxDistance 600 // After maxDistance (cm), no buzzer/vibration output
 #define scalar 0.8 // Outermost bucket = 20%, 2nd is outer 20% of remaining, etc.
 #define numBuckets 16 // Number of buckets to categorize distance into
+#define bucketMap(dist) map(bucketize(dist), 15, 0, 0, 255)
 
 // Focus on 1 distance if it is much closer than either other distance
-#define singleClose(dist, distA, distB) ((dist < maxDistance / 4) && (dist < distA * 0.5) && (dist < distB * 0.5))
+#define closeFactor 0.5
+#define maxClose maxDistance / 4
+#define singleClose(dist, distA, distB) ((dist < maxClose) && (dist < distA * closeFactor) && (dist < distB * closeFactor))
 
 enum ActiveMode{
   off = 0,
@@ -39,11 +43,11 @@ enum ActuatorMode {
 typedef struct{
   uint8_t vib;
   uint8_t buz;
-  float modifier;
+  float vibModifier;
 }actuatorSet;
 
-int16_t tfDist, distL, distC, distR;
-unsigned long getDataTimer;
+int16_t distL, distC, distR;
+uint64_t getDataTimer;
 
 TFLI2C tfl;
 ActiveMode activeMode;
@@ -54,6 +58,7 @@ void setup()
 {
   distL = distC = distR = 0;
   getDataTimer = 0;
+
   activeMode = distance;
   actuatorMode = vibration;
   
@@ -64,9 +69,9 @@ void setup()
   rightSet.vib = rightVib;
   rightSet.buz = rightBuz;
 
-  leftSet.modifier = .35;
-  centerSet.modifier = .55;
-  rightSet.modifier = 1;
+  leftSet.vibModifier = .35;
+  centerSet.vibModifier = .55;
+  rightSet.vibModifier = 1;
 
   //Serial.begin(9600);
   Wire.begin();
@@ -92,7 +97,7 @@ void loop()
 }
 
 void runDistance() {
-  unsigned long millisS = millis();
+  uint64_t millisS = millis();
 
   // Collect distance data only from whoever's turn it is
   if (millisS - getDataTimer > 99) {
@@ -100,46 +105,46 @@ void runDistance() {
 
   } else if (millisS - getDataTimer > 66) {
     if(tfl.getData(distL, leftTFL)) 
-      actuateOutput(distL, leftSet);   
+      actuatorOutput(distL, leftSet);   
 
   } else if (millisS - getDataTimer > 33) {
     if(tfl.getData(distC, centerTFL))
-      actuateOutput(distC, centerSet);
+      actuatorOutput(distC, centerSet);
 
   } else {
     if (tfl.getData(distR, rightTFL))
-      actuateOutput(distR, rightSet); 
+      actuatorOutput(distR, rightSet); 
 
   }
 
   // If one is way closer than the other two, focus on it exclusively
   if (singleClose(distL, distC, distR)) {
-    actuateOutput(0, centerSet);
-    actuateOutput(0, rightSet);
+    actuatorOutput(0, centerSet);
+    actuatorOutput(0, rightSet);
   } 
   else if (singleClose(distC, distL, distR)) {
-    actuateOutput(0, leftSet);
-    actuateOutput(0, rightSet);
+    actuatorOutput(0, leftSet);
+    actuatorOutput(0, rightSet);
   } 
   else if (singleClose(distR, distL, distC)) {    
-    actuateOutput(0, leftSet);
-    actuateOutput(0, centerSet);
+    actuatorOutput(0, leftSet);
+    actuatorOutput(0, centerSet);
   }
 }
 
-void actuateOutput(uint8_t output, actuatorSet actSet) {
+void actuatorOutput(uint8_t output, actuatorSet actSet) {
   switch(actuatorMode) {
     case none:
       break;
     case vibration:
-      analogWrite(actSet.vib, (uint8_t)(actSet.modifier * map(bucketize(output), 15, 0, 0, 255)));
+      analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * bucketMap(output)));
       break;
     case buzzer:
-      analogWrite(actSet.buz, map(bucketize(output), 15, 0, 0, 255));
+      analogWrite(actSet.buz, bucketMap(output));
       break;
     case all:
-      analogWrite(actSet.vib, (uint8_t)(actSet.modifier * map(bucketize(output), 15, 0, 0, 255)));
-      analogWrite(actSet.buz, map(bucketize(output), 15, 0, 0, 255));
+      analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * bucketMap(output)));
+      analogWrite(actSet.buz, bucketMap(output));
       break;
   }
 }
@@ -147,7 +152,7 @@ void actuateOutput(uint8_t output, actuatorSet actSet) {
 /* Bucketing group distances 0 - maxDistance into numBuckets buckets, larger being further 
  * Find the bucket of a given distance
  */
-uint8_t bucketize(float dist) {
+uint8_t bucketize(int16_t dist) {
     uint8_t bucket = numBuckets - 1;
     float maxDist = maxDistance;
 

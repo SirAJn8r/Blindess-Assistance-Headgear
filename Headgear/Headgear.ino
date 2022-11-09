@@ -1,18 +1,24 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <TFLI2C.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_LSM303_U.h>
 
 #define leftTFL 0x12 // I2C address of left TF-Luna
 #define centerTFL 0x11 // I2C address of center TF-Luna
 #define rightTFL 0x10 // I2C address of right TF-Luna
 
+#define leftBuz 7 // pin for left-side buzzer
+#define centerBuz 8 // pin for center buzzer
+#define rightBuz 9 // pin for right buzzer
+
 #define leftVib 4 // pin for left-side vibration motor
 #define centerVib 5 // pin for center vibration motor
 #define rightVib 6 // pin for right vibration motor
 
-#define leftBuz 7 // pin for left-side buzzer
-#define centerBuz 8 // pin for center buzzer
-#define rightBuz 9 // pin for right buzzer
+#define leftVibMod 0.35 // adjust left vibrator power
+#define centerVibMod 0.55 // adjust center vibrator power
+#define rightVibMod 1 // adjust right vibrator power
 
 // Bucketing
 #define maxDistance 600 // After maxDistance (cm), no buzzer/vibration output
@@ -24,6 +30,16 @@
 #define closeFactor 0.5
 #define maxClose maxDistance / 4
 #define singleClose(dist, distA, distB) ((dist < maxClose) && (dist < distA * closeFactor) && (dist < distB * closeFactor))
+
+// Photocell
+#define photocellPin A1 // pin for photocell sensor
+#define minBrightness 10
+#define maxBrightness 1000
+#define photocellMap(brightness) map(brightness, maxBrightness, minBrightness, 0, 255)
+
+// Compass
+#define compassAddr 0x20
+#define northBound 10 // how many degrees off from north still counts
 
 enum ActiveMode{
   off = 0,
@@ -48,11 +64,15 @@ typedef struct{
 
 int16_t distL, distC, distR;
 uint64_t getDataTimer;
+sensors_event_t compassData;
+double compassHeading;
 
 TFLI2C tfl;
 ActiveMode activeMode;
 ActuatorMode actuatorMode;
 actuatorSet leftSet, centerSet, rightSet;
+
+Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(12345);
 
 void setup()
 {
@@ -64,21 +84,26 @@ void setup()
   
   leftSet.vib = leftVib;
   leftSet.buz = leftBuz;
+  leftSet.vibModifier = leftVibMod;
   centerSet.vib = centerVib;
   centerSet.buz = centerBuz;
+  centerSet.vibModifier = centerVibMod;
   rightSet.vib = rightVib;
   rightSet.buz = rightBuz;
-
-  leftSet.vibModifier = .35;
-  centerSet.vibModifier = .55;
-  rightSet.vibModifier = 1;
-
-  //Serial.begin(9600);
-  Wire.begin();
+  rightSet.vibModifier = rightVibMod;
 
   pinMode(leftVib, OUTPUT);
   pinMode(centerVib, OUTPUT);
   pinMode(rightVib, OUTPUT);
+  pinMode(leftBuz, OUTPUT);
+  pinMode(centerBuz, OUTPUT);
+  pinMode(centerBuz, OUTPUT);
+  pinMode(photocell, INPUT);
+
+  Wire.begin();
+
+  // while(!mag.begin()) ; // wait for mag to come online
+  mag.enableAutoRange(true);
 }
 
 void loop()
@@ -90,8 +115,10 @@ void loop()
       runDistance();
       break;
     case photocell:
+      runPhotocell();
       break;
     case compass:
+      runCompass();
       break;
   }
 }
@@ -105,15 +132,15 @@ void runDistance() {
 
   } else if (millisS - getDataTimer > 66) {
     if(tfl.getData(distL, leftTFL)) 
-      actuatorOutput(distL, leftSet);   
+      actuatorOutput(bucketMap(distL), leftSet);   
 
   } else if (millisS - getDataTimer > 33) {
     if(tfl.getData(distC, centerTFL))
-      actuatorOutput(distC, centerSet);
+      actuatorOutput(bucketMap(distC), centerSet);
 
   } else {
     if (tfl.getData(distR, rightTFL))
-      actuatorOutput(distR, rightSet); 
+      actuatorOutput(bucketMap(distR), rightSet); 
 
   }
 
@@ -132,19 +159,45 @@ void runDistance() {
   }
 }
 
+void runPhotocell() {
+  actuatorOutput(0, leftSet);
+  actuatorOutput(photocellMap(analogRead(photocellPin)), centerSet);
+  actuatorOutput(0, rightSet);
+}
+
+void runCompass() {
+  mag.getEvent(&compassData);
+  compassHeading = atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI;
+
+  if(compassHeading < northBound && compassHeading > -northBound) {
+    actuatorOutput(0, leftSet);
+    actuatorOutput(255, centerSet);
+    actuatorOutput(0, rightSet);
+  } else {
+    // if north is left, then left output 255, right 0. Else, vice versa
+    uint8_t northIsLeft = compassHeading < 0 ? 255 : 0;
+    actuatorOutput(northIsLeft, leftSet);
+    actuatorOutput(0, centerSet);
+    actuatorOutput(255 - northIsLeft, rightSet);
+  }
+}
+
+/* Writes the output to the actuator(s) currently chosen by the mode
+ * For the vibration motors, adjusts their output by their custom modifier
+ */
 void actuatorOutput(uint8_t output, actuatorSet actSet) {
   switch(actuatorMode) {
     case none:
       break;
     case vibration:
-      analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * bucketMap(output)));
+      analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * output));
       break;
     case buzzer:
-      analogWrite(actSet.buz, bucketMap(output));
+      analogWrite(actSet.buz, output);
       break;
     case all:
-      analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * bucketMap(output)));
-      analogWrite(actSet.buz, bucketMap(output));
+      analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * output));
+      analogWrite(actSet.buz, output);
       break;
   }
 }

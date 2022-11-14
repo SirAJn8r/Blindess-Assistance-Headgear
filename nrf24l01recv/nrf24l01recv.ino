@@ -32,19 +32,20 @@ void setup() {
   Serial.begin(9600);
   
   radio.begin();
-  radio.setAutoAck(false); // appeend Ack packet
+  radio.setAutoAck(false); // append Ack packet
   radio.setDataRate(RF24_250KBPS); // transmission rate
-  radio.setPALevel(RF24_PA_MAX); // distance and energy consump.
-  radio.setPayloadSize(sizeof(payload)); // default 32 bytes
+  radio.setPALevel(RF24_PA_LOW); // distance and energy consump.
+  radio.setPayloadSize(sizeof(payload)); // up to 32 bytes
 
-  radio.openWritingPipe(address[0]);
-  radio.openReadingPipe(1, address[1]);
+  radio.openWritingPipe(address[1]); // write to B
+  radio.openReadingPipe(1, address[0]); // read from A
 }
 
 void loop() {
   //unsigned long currentMillis = millis();
+
+  // Try to read
   bool readData = false;
-  
   radio.startListening();
   if(radio.available() > 0) {
     radio.read(&payload, sizeof(payload)); 
@@ -52,6 +53,7 @@ void loop() {
   }
   radio.stopListening();
 
+  // Try to respond
   if(readData) {
     Serial.print("Received: ");
     Serial.println(payload.data1);
@@ -67,6 +69,7 @@ void loop() {
       Serial.println("Bounce count too high, no response");
   }
 
+  // Try to send
   if(Serial.available()) {
     payload.data1 = Serial.readString().toInt();
     payload.bounceCount = 0;

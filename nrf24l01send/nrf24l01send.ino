@@ -54,7 +54,7 @@ void loop() {
     Serial.print("Received ");
     Serial.println(payload.data1);
     
-    if(bounceCount < 5) {
+    if(payload.bounceCount < 5) {
       payload.data1 += 5;
       payload.bounceCount++;
       Serial.print("Responding with ");
@@ -72,6 +72,6 @@ void loop() {
     Serial.println(payload.data1);
     radio.write(&payload, sizeof(payload));
   }
-  
+
   //delay(INTERVAL_MS_TRANSMISSION);
 }

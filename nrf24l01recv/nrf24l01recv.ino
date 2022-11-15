@@ -59,7 +59,7 @@ void loop() {
     Serial.println(payload.data1);
     //lastSignalMillis = currentMillis;
 
-    if(bounceCount < 5) {
+    if(payload.bounceCount < 5) {
       payload.data1 += 10;
       payload.bounceCount++;
       Serial.print("Responding with ");

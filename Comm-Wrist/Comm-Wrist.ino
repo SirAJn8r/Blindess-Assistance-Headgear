@@ -11,6 +11,34 @@
 #define listenDelay 50
 #define sendTime 150
 
+enum ActiveMode{
+  off = 0,
+  distance,
+  photocell,
+  compass,
+};
+
+enum ActuatorMode {
+  none = 0,
+  vibration,
+  buzzer,
+  all,
+};
+
+struct sensorPayload {
+  int16_t sensorData;
+  uint8_t sensorNumber; //0-2 = left-right LiDAR, 3 = photocell, 4 = compass
+
+  // For ack'ing
+  uint8_t activeMode;
+  uint8_t actuatorMode;
+}inPayload;
+
+struct terminalRequestPayload {
+  uint8_t activeMode; // set/update the active mode
+  uint8_t actuatorMode; // set/update the actuator mode
+}outPayload;
+
 LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 byte backSlash[8] = {
   0b00000,
@@ -43,34 +71,6 @@ byte customCharDotSel[8] = {
   0b00000
 };
 
-enum ActiveMode{
-  off = 0,
-  distance,
-  photocell,
-  compass,
-};
-
-enum ActuatorMode {
-  none = 0,
-  vibration,
-  buzzer,
-  all,
-};
-
-struct sensorPayload {
-  int16_t sensorData;
-  uint8_t sensorNumber; //0-2 = left-right LiDAR, 3 = photocell, 4 = compass
-
-  // For ack'ing
-  uint8_t activeMode;
-  uint8_t actuatorMode;
-}inPayload;
-
-struct terminalRequestPayload {
-  uint8_t activeMode; // set/update the active mode
-  uint8_t actuatorMode; // set/update the actuator mode
-}outPayload;
-
 const byte headToWristAddr[6] = "00001";
 const byte wristToHeadAddr[6] = "00002";
 RF24 radio(CE_PIN, CSN_PIN);
@@ -82,7 +82,6 @@ int dist = 0;
 int deg = 0;
 int cs = 3; //compass shift
 int lux = 0; // brightness
-int mode = 0;
 long long changeTimer = 10000;
 
 uint64_t cycleStartTime, currentCycleTime;
@@ -123,11 +122,11 @@ void setup()
   cycleStartTime = millis();
 }
 
-
 void loop()
 {
   communicate();
 
+  /* For Testing: Roll through data */
   //printCompass();
   if (millis() % 8 == 0) {
     lux += 20;
@@ -142,32 +141,31 @@ void loop()
   if (dist > 180) dist = 0;
   if (deg > 180) deg = -180;
   if (lux > 1000) lux = 0;
+  /* End For Testing */
 
-  if (mode == 0){
-    printAll();
-  } else if (mode == 1){
-    printLidar();
-  } else if (mode == 2){
-    printCompass();
-  } else if (mode == 3){
-    printPhotoCell();
+  switch(activeMode) {
+    case off:
+      printAll(); break;
+    case distance:
+      printLidar(); break;
+    case photocell:
+      printPhotoCell(); break;
+    case compass:
+      printCompass(); break;
   }
+
+  /* For Testing: Roll through modes */
   if (millis() > changeTimer){
     changeTimer = millis() + 10000;
-    mode++;
-    if (mode > 3) mode = 0;
+    activeMode = (activeMode + 1) % 4;
+    readNotWrite = false; // write mode, tell headband to switch modes
     lcd.clear();
   }
+  /* End For Testing */
 }
 
 void communicate() {
   currentCycleTime = millis() - cycleStartTime;
-
-  // temporary thing, for now just send a message every 5 seconds to alternate through modes
-  if(currentCycleTime > 5000) {
-    activeMode = (activeMode + 1) % 4;
-    readNotWrite = false;
-  }
 
   if (readNotWrite) {
     if(!isListening) {
@@ -180,9 +178,8 @@ void communicate() {
       if(radio.available() > 0)
         readInPayload();
     }
-  }
-
-  else { // write, not read
+  
+  } else {
     if (isListening) {
       radio.stopListening();
       cycleStartTime = millis();
@@ -207,20 +204,15 @@ void readInPayload() {
   
   switch(inPayload.sensorNumber) {
     case 0:
-      distL = inPayload.sensorData;
-      break;
+      distL = inPayload.sensorData; break;
     case 1:
-      distC = inPayload.sensorData;
-      break;
+      distC = inPayload.sensorData; break;
     case 2:
-      distR = inPayload.sensorData;
-      break;
+      distR = inPayload.sensorData; break;
     case 3:
-      luxBrightness = inPayload.sensorData;
-      break;
+      luxBrightness = inPayload.sensorData; break;
     case 4:
-      compassHeading = inPayload.sensorData;
-      break;
+      compassHeading = inPayload.sensorData; break;
   }
 }
 

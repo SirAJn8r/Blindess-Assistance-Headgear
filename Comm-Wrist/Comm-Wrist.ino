@@ -105,8 +105,8 @@ void setup() {
 
   radio.begin();
   radio.setAutoAck(false); // append Ack packet
-  radio.setDataRate(RF24_250KBPS); // transmission rate
-  radio.setPALevel(RF24_PA_LOW); // distance and energy consump.
+  radio.setDataRate(RF24_2MBPS); // transmission rate
+  radio.setPALevel(RF24_PA_MAX); // distance and energy consump.
   radio.openWritingPipe(wristToHeadAddr);
   radio.openReadingPipe(0, headToWristAddr);
 

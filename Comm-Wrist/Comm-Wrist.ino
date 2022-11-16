@@ -1,6 +1,3 @@
-//YWROBOT
-//Compatible with the Arduino IDE 1.0
-//Library version:1.1
 #include <LiquidCrystal_I2C.h>
 #include "RF24.h"
 #include "nRF24L01.h"
@@ -78,28 +75,26 @@ RF24 radio(CE_PIN, CSN_PIN);
 ActiveMode activeMode;
 ActuatorMode actuatorMode;
 
-int dist = 0;
-int deg = 0;
-int cs = 3; //compass shift
-int lux = 0; // brightness
-long long changeTimer = 10000;
-
-uint64_t cycleStartTime, currentCycleTime;
-bool readNotWrite, isListening;
+uint64_t changeTimer, cycleStartTime, currentCycleTime;
+int32_t cs;
 int16_t distL, distC, distR, luxBrightness, compassHeading;
+bool readNotWrite, isListening;
 
-void setup()
-{  
+void setup() {  
   distL = distC = distR = luxBrightness = compassHeading = 0;
+  
+  cs = 3;
+  changeTimer = 10000;
+
   activeMode = distance;
   actuatorMode = vibration;
 
   lcd.init(); 
-  // Print a message to the LCD.
   lcd.backlight();
-  lcd.createChar(0, customCharDot); // create a new custom character
-  lcd.createChar(1, customCharDotSel); // create a new custom character
-  lcd.createChar(2, backSlash); // create a new custom character
+  lcd.createChar(0, customCharDot);
+  lcd.createChar(1, customCharDotSel);
+  lcd.createChar(2, backSlash);
+
   lcd.setCursor(3,0);
   //lcd.print("Hello, world!");
   //lcd.setCursor(2,1);
@@ -122,25 +117,28 @@ void setup()
   cycleStartTime = millis();
 }
 
-void loop()
-{
+void loop() {
   communicate();
 
   /* For Testing: Roll through data */
   //printCompass();
   if (millis() % 8 == 0) {
-    lux += 20;
+    luxBrightness += 20;
   }
   if (millis() % 50 == 0) {
-    dist += 10;
+    distL += 10;
+    distC += 10;
+    distR += 10;
   }
   if (millis() % 3 == 0) {
-    deg += 5;
+    compassHeading += 5;
   }
   
-  if (dist > 180) dist = 0;
-  if (deg > 180) deg = -180;
-  if (lux > 1000) lux = 0;
+  if (distL > 180) distL = 0;
+  if (distC > 180) distC = 0;
+  if (distR > 180) distR = 0;
+  if (compassHeading > 180) compassHeading = -180;
+  if (luxBrightness > 1000) luxBrightness = 0;
   /* End For Testing */
 
   switch(activeMode) {
@@ -224,19 +222,19 @@ void printAll() {
   lcd.setCursor(15,0);
   lcd.print(char(0b01111110));
   
-  String dist1 = String(dist);
+  String dist1 = String(distL);
   int cursor1 = 4 - dist1.length();
   lcd.setCursor(cursor1, 1);
   lcd.print(dist1);
   lcd.print("cm");
 
-  String dist2 = String(dist);
+  String dist2 = String(distC);
   int cursor2 = 10 - dist2.length();
   lcd.setCursor(cursor2, 1);
   lcd.print(dist2);
   lcd.print("cm");
 
-  String dist3 = String(dist);
+  String dist3 = String(distR);
   int cursor3 = 16 - dist3.length();
   lcd.setCursor(cursor3, 1);
   lcd.print(dist3);
@@ -244,18 +242,18 @@ void printAll() {
 
 
 
-  int luxL = String(lux).length();
+  int luxL = String(luxBrightness).length();
   lcd.setCursor(2-luxL,2);
   lcd.print("   ");
   lcd.setCursor(5-luxL,2);
-  lcd.print(lux);
+  lcd.print(luxBrightness);
   lcd.print(" Lux");
 
 
 
   lcd.setCursor(11,2);
   lcd.print("  ");
-  String degS = String((deg/10) * 10);
+  String degS = String((compassHeading/10) * 10);
   lcd.setCursor(13,2);
   lcd.print(degS);
   lcd.print(char(0b11011111));
@@ -271,15 +269,15 @@ void printAll() {
 }
 
 void printPhotoCell() {
-  int luxL = String(lux).length();
+  int luxL = String(luxBrightness).length();
   lcd.setCursor(7-luxL,2);
   lcd.print("   ");
   lcd.setCursor(10-luxL,2);
-  lcd.print(lux);
+  lcd.print(luxBrightness);
   lcd.print(" Lux");
 
   //print brightness bar
-  int bars = (lux * 9 / 1000)+1;
+  int bars = (luxBrightness * 9 / 1000)+1;
   lcd.setCursor(4,1);
   lcd.print("|");
   for (int i = 0 ; i < bars; i++)
@@ -303,19 +301,19 @@ void printLidar() {
   lcd.setCursor(15,0);
   lcd.print(char(0b01111110));
 
-  String dist1 = String(dist);
+  String dist1 = String(distL);
   int cursor1 = 4 - dist1.length();
   lcd.setCursor(cursor1, 1);
   lcd.print(dist1);
   lcd.print("cm");
 
-  String dist2 = String(dist);
+  String dist2 = String(distC);
   int cursor2 = 10 - dist2.length();
   lcd.setCursor(cursor2, 1);
   lcd.print(dist2);
   lcd.print("cm");
 
-  String dist3 = String(dist);
+  String dist3 = String(distR);
   int cursor3 = 16 - dist3.length();
   lcd.setCursor(cursor3, 1);
   lcd.print(dist3);
@@ -331,14 +329,14 @@ void printLidar() {
 void printCompass() {
   lcd.setCursor(11,1);
   lcd.print("  ");
-  String degS = String((deg/10) * 10);
+  String degS = String((compassHeading/10) * 10);
   lcd.setCursor(13,1);
   lcd.print(degS);
   lcd.print(char(0b11011111));
   lcd.print("  ");
 
   // direction
-  if (deg >= -23 && deg <= 23) { // north
+  if (compassHeading >= -23 && compassHeading <= 23) { // north
     printCompassOutline();
     lcd.setCursor(cs + 2,0);
     lcd.print(" N ");
@@ -349,7 +347,7 @@ void printCompass() {
     lcd.setCursor(cs + 2,3);
     lcd.print("   ");
   } 
-  else if (deg >= 24 && deg <= 66) { // north east
+  else if (compassHeading >= 24 && compassHeading <= 66) { // north east
     printCompassOutline();
     lcd.setCursor(cs + 2,0);
     lcd.print("   ");
@@ -360,7 +358,7 @@ void printCompass() {
     lcd.setCursor(cs + 2,3);
     lcd.print("   ");
   }
-  else if (deg >= 67 && deg <= 113) { // east
+  else if (compassHeading >= 67 && compassHeading <= 113) { // east
     printCompassOutline();
     lcd.setCursor(cs + 2,0);
     lcd.print("   ");
@@ -371,7 +369,7 @@ void printCompass() {
     lcd.setCursor(cs + 2,3);
     lcd.print("   ");
   }
-  else if (deg >= 114 && deg <= 156) { // south east
+  else if (compassHeading >= 114 && compassHeading <= 156) { // south east
     printCompassOutline();
     lcd.setCursor(cs + 2,0);
     lcd.print("   ");
@@ -384,7 +382,7 @@ void printCompass() {
     lcd.setCursor(cs + 2,3);
     lcd.print("   ");
   }
-  else if (deg > 157 || deg < -157) { // south
+  else if (compassHeading > 157 || compassHeading < -157) { // south
     printCompassOutline();
     lcd.setCursor(cs + 2,0);
     lcd.print("   ");
@@ -395,7 +393,7 @@ void printCompass() {
     lcd.setCursor(cs + 2,3);
     lcd.print(" | ");
   }
-  else if (deg >= -66 && deg <= -24) { // north west
+  else if (compassHeading >= -66 && compassHeading <= -24) { // north west
     printCompassOutline();
     lcd.setCursor(cs + 2,0);
     lcd.print("   ");
@@ -408,7 +406,7 @@ void printCompass() {
     lcd.setCursor(cs + 2,3);
     lcd.print("   ");
   }
-  else if (deg >= -113 && deg <= -67) { // west
+  else if (compassHeading >= -113 && compassHeading <= -67) { // west
     printCompassOutline();
     lcd.setCursor(cs + 2,0);
     lcd.print("   ");
@@ -419,7 +417,7 @@ void printCompass() {
     lcd.setCursor(cs + 2,3);
     lcd.print("   ");
   }
-  else if (deg >= -156 && deg <= -114) { // south west
+  else if (compassHeading >= -156 && compassHeading <= -114) { // south west
     printCompassOutline();
     lcd.setCursor(cs + 2,0);
     lcd.print("   ");
@@ -438,7 +436,7 @@ void printCompass() {
   lcd.print(char(0));
 }
 
-void printCompassOutline(){
+void printCompassOutline() {
   lcd.setCursor(cs + 1,0);
   lcd.print("/");
   lcd.setCursor(cs + 5,0);

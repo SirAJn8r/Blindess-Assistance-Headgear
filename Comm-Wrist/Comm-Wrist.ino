@@ -2,6 +2,14 @@
 //Compatible with the Arduino IDE 1.0
 //Library version:1.1
 #include <LiquidCrystal_I2C.h>
+#include "RF24.h"
+#include "nRF24L01.h"
+#include "SPI.h"
+
+#define CE_PIN 9
+#define CSN_PIN 10
+#define listenDelay 50
+#define sendTime 150
 
 LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 byte backSlash[8] = {
@@ -35,18 +43,61 @@ byte customCharDotSel[8] = {
   0b00000
 };
 
+enum ActiveMode{
+  off = 0,
+  distance,
+  photocell,
+  compass,
+};
+
+enum ActuatorMode {
+  none = 0,
+  vibration,
+  buzzer,
+  all,
+};
+
+struct sensorPayload {
+  int16_t sensorData;
+  uint8_t sensorNumber; //0-2 = left-right LiDAR, 3 = photocell, 4 = compass
+
+  // For ack'ing
+  uint8_t activeMode;
+  uint8_t actuatorMode;
+  bool isPeriodical;
+}inPayload;
+
+struct terminalRequestPayload {
+  uint8_t activeMode; // set/update the active mode
+  uint8_t actuatorMode; // set/update the actuator mode
+  bool isPeriodical; // true = periodical, false = on-demand
+}outPayload;
+
+const byte headToWristAddr[6] = "00001";
+const byte wristToHeadAddr[6] = "00002";
+RF24 radio(CE_PIN, CSN_PIN);
+
+ActiveMode activeMode;
+ActuatorMode actuatorMode;
+
 int dist = 0;
 int deg = 0;
 int cs = 3; //compass shift
 int lux = 0; // brightness
 int mode = 0;
-
 long long changeTimer = 10000;
-void setup()
-{
 
-  
-  lcd.init();                      // initialize the lcd 
+uint64_t cycleStartTime, currentCycleTime;
+bool readNotWrite, isListening;
+int16_t distL, distC, distR, luxBrightness, compassHeading;
+
+void setup()
+{  
+  distL = distC = distR = luxBrightness = compassHeading = 0;
+  activeMode = distance;
+  actuatorMode = vibration;
+
+  lcd.init(); 
   // Print a message to the LCD.
   lcd.backlight();
   lcd.createChar(0, customCharDot); // create a new custom character
@@ -56,15 +107,29 @@ void setup()
   //lcd.print("Hello, world!");
   //lcd.setCursor(2,1);
   //lcd.print("Ywrobot Arduino!");
-  // lcd.setCursor(0,2);
+  //lcd.setCursor(0,2);
   //lcd.print("Arduino LCM IIC 2004");
-  // lcd.setCursor(2,3);
+  //lcd.setCursor(2,3);
   //lcd.print("Power By Ec-yuan!");
+
+  radio.begin();
+  radio.setAutoAck(false); // append Ack packet
+  radio.setDataRate(RF24_250KBPS); // transmission rate
+  radio.setPALevel(RF24_PA_LOW); // distance and energy consump.
+  radio.openWritingPipe(wristToHeadAddr);
+  radio.openReadingPipe(0, headToWristAddr);
+
+  readNotWrite = true;
+  isListening = false;
+  radio.stopListening();
+  cycleStartTime = millis();
 }
 
 
 void loop()
 {
+  communicate();
+
   //printCompass();
   if (millis() % 8 == 0) {
     lux += 20;
@@ -97,6 +162,70 @@ void loop()
   }
 }
 
+void communicate() {
+  currentCycleTime = millis() - cycleStartTime;
+
+  // temporary thing, for now just send a message every 5 seconds to alternate through modes
+  if(currentCycleTime > 5000) {
+    activeMode = (activeMode + 1) % 4;
+    readNotWrite = false;
+  }
+
+  if (readNotWrite) {
+    if(!isListening) {
+      radio.startListening();
+      cycleStartTime = millis();
+      isListening = true;
+    } 
+    
+    else if (currentCycleTime > listenDelay) {
+      if(radio.available() > 0)
+        readInPayload();
+    }
+  }
+
+  else { // write, not read
+    if (isListening) {
+      radio.stopListening();
+      cycleStartTime = millis();
+      isListening = false;
+    }
+    
+    else if(currentCycleTime < sendTime) {
+      outPayload.activeMode = activeMode;
+      outPayload.actuatorMode = actuatorMode;
+      outPayload.isPeriodical = true;
+      radio.write(&outPayload, sizeof(outPayload));
+    } 
+    
+    else
+      readNotWrite = true;
+  }
+}
+
+void readInPayload() {
+  radio.read(&inPayload, sizeof(inPayload));
+
+  //if (activeMode == inPayload.activeMode && actuatorMode == inPayload.actuatorMode)
+  
+  switch(inPayload.sensorNumber) {
+    case 0:
+      distL = inPayload.sensorData;
+      break;
+    case 1:
+      distC = inPayload.sensorData;
+      break;
+    case 2:
+      distR = inPayload.sensorData;
+      break;
+    case 3:
+      luxBrightness = inPayload.sensorData;
+      break;
+    case 4:
+      compassHeading = inPayload.sensorData;
+      break;
+  }
+}
 
 void printAll() {
   lcd.setCursor(3,0);

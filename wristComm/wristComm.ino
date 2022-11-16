@@ -4,9 +4,8 @@
 
 #define CE_PIN 9
 #define CSN_PIN 10
-#define commCycleListenDelay 50
-#define commCycleListenTime 200 // 150 + listenDelay
-#define commCycleSendTime 250 // 50 + listenTime + listenDelay
+#define listenDelay 50
+#define sendTime 150
 
 RF24 radio(CE_PIN, CSN_PIN);
 const byte headToWristAddr[6] = "00001";
@@ -30,8 +29,8 @@ struct terminalRequestPayload {
 
 sensorPayload inPayload;
 terminalRequestPayload outPayload;
-uint64_t startListeningTime, currentCycleTime;
-bool readNotWrite;
+uint64_t cycleStartTime, currentCycleTime;
+bool readNotWrite, isListening;
 
 void setup() {
   Serial.begin(9600);
@@ -44,19 +43,26 @@ void setup() {
   radio.openWritingPipe(wristToHeadAddr);
   radio.openReadingPipe(0, headToWristAddr);
 
-  readNotWrite = false;
+  readNotWrite = true;
+  isListening = false;
   radio.stopListening();
-  startListeningTime = millis() + commCycleListenTime;
+  cycleStartTime = millis();
 }
 
 void loop() {
-  currentCycleTime = millis() - startListeningTime;
+  currentCycleTime = millis() - cycleStartTime;
 
-  if (currentCycleTime < commCycleListenDelay) {
-    // wait
+  if(currentCycleTime > 2000) {
+    readNotWrite = false;
   }
 
-  else if (currentCycleTime < commCycleListenTime) {
+  if (readNotWrite && !isListening) {
+    radio.startListening();
+    cycleStartTime = millis();
+    isListening = true;
+  }
+
+  else if (readNotWrite && currentCycleTime > listenDelay) {
     if(radio.available() > 0) {
       radio.read(&inPayload, sizeof(inPayload));
       
@@ -73,21 +79,19 @@ void loop() {
     }
   }
 
-  else if (currentCycleTime < commCycleSendTime) {
-    if(readNotWrite) {    
-      readNotWrite = false;
-      radio.stopListening();
-    } else {
+  else if (!readNotWrite && isListening) {
+    radio.stopListening();
+    cycleStartTime = millis();
+    isListening = false;
+  }
+
+  else if (!readNotWrite && !isListening) {
+    if(currentCycleTime < sendTime) {
       outPayload.activeMode = 0;
       outPayload.actuatorMode = 1;
       outPayload.isPeriodical = true;
       radio.write(&outPayload, sizeof(outPayload));
-    }
-  }
-
-  else {
-    readNotWrite = true;
-    radio.startListening();
-    startListeningTime = millis();    
+    } else
+      readNotWrite = true;
   }
 }

@@ -6,7 +6,7 @@
 #define CSN_PIN 10
 #define commCycleListenDelay 50
 #define commCycleListenTime 100 // 50 + listenDelay
-#define commCycleSendTime 250 // 150 + listenTime + listenDelay
+#define commCycleSendTime 150 // 50 + listenTime + listenDelay
 
 RF24 radio(CE_PIN, CSN_PIN);
 const byte headToWristAddr[6] = "00001";

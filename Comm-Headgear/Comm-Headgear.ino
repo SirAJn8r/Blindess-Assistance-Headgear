@@ -3,6 +3,9 @@
 #include <TFLI2C.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_LSM303_U.h>
+#include "RF24.h"
+#include "nRF24L01.h"
+#include "SPI.h"
 
 #define leftTFL 0x12 // I2C address of left TF-Luna
 #define centerTFL 0x11 // I2C address of center TF-Luna
@@ -43,6 +46,18 @@
 #define compassAddr 0x20
 #define northBound 10 // how many degrees off from north still counts
 
+// Communication
+#define CE_PIN 9
+#define CSN_PIN 10
+#define commCycleListenDelay 50
+#define commCycleListenTime 100 // 50 + listenDelay
+#define commCycleSendTime 150 // 50 + listenTime + listenDelay
+
+#define activeModeSize 4
+#define actuatorModeSize 4
+#define validActiveMode(n) (n >= 0 && n < activeModeSize)
+#define validActuatorMode(n) (n >= 0 && n < actuatorModeSize)
+
 enum ActiveMode{
   off = 0,
   distance,
@@ -64,21 +79,41 @@ typedef struct{
   float vibModifier;
 }actuatorSet;
 
-int16_t distL, distC, distR;
-uint64_t getDataTimer;
+struct sensorPayload {
+  int16_t sensorData;
+  uint8_t sensorNumber; //0-2 = left-right LiDAR, 3 = photocell, 4 = compass
+
+  // For ack'ing
+  uint8_t activeMode;
+  uint8_t actuatorMode;
+  bool isPeriodical;
+}outPayload;
+
+struct terminalRequestPayload {
+  uint8_t activeMode; // set/update the active mode
+  uint8_t actuatorMode; // set/update the actuator mode
+  bool isPeriodical; // true = periodical, false = on-demand
+}inPayload;
+
+uint64_t getDataTimer, startListeningTime, currentCycleTime;
 sensors_event_t compassData;
-double compassHeading;
+int16_t distL, distC, distR, luxBrightness, compassHeading;
+bool isListening, isPeriodical;
+
+const byte headToWristAddr[6] = "00001";
+const byte wristToHeadAddr[6] = "00002";
 
 TFLI2C tfl;
 ActiveMode activeMode;
 ActuatorMode actuatorMode;
 actuatorSet leftSet, centerSet, rightSet;
-
-Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(12345);
+RF24 radio(CE_PIN, CSN_PIN);
+Adafruit_LSM303_Mag_Unified mag(12345);
 
 void setup()
 {
   distL = distC = distR = maxDistance;
+  luxBrightness = compassHeading = 0;
   getDataTimer = 0;
 
   activeMode = distance;
@@ -103,6 +138,18 @@ void setup()
   pinMode(photocell, INPUT);
 
   Wire.begin();
+  radio.begin();
+
+  radio.setAutoAck(false); // append Ack packet
+  radio.setDataRate(RF24_250KBPS); // transmission rate
+  radio.setPALevel(RF24_PA_LOW); // distance and energy consump.
+
+  radio.openWritingPipe(headToWristAddr);
+  radio.openReadingPipe(0, wristToHeadAddr);
+
+  isListening = true;
+  radio.startListening();
+  startListeningTime = millis();
 
   // while(!mag.begin()) ; // wait for mag to come online
   // mag.enableAutoRange(true);
@@ -121,6 +168,75 @@ void loop()
       break;
     case compass:
       runCompass();
+      break;
+  }
+  communicate();
+}
+
+void communicate() {
+  currentCycleTime = millis() - startListeningTime;
+
+  if (currentCycleTime < commCycleListenDelay) ;
+    // Delay so radio can start listening properly
+  else if (currentCycleTime < commCycleListenTime) {
+    if(radio.available() > 0)
+      readInPayload();
+  }
+  else if (currentCycleTime < commCycleSendTime) {
+    if(isListening) {    
+      isListening = false;
+      radio.stopListening();
+    } else
+      sendOutPayload();
+  }
+  else {
+    isListening = true;
+    radio.startListening();
+    startListeningTime = millis();
+  }
+}
+
+void readInPayload() {
+  radio.read(&inPayload, sizeof(inPayload));
+  
+  if(validActiveMode(inPayload.activeMode))
+    activeMode = inPayload.activeMode;
+  if(validActuatorMode(inPayload.actuatorMode))
+    actuatorMode = inPayload.actuatorMode;
+  isPeriodical = inPayload.isPeriodical;
+}
+
+void sendOutPayload() {
+  if (activeMode == off)
+    return;
+
+  outPayload.activeMode = activeMode;
+  outPayload.actuatorMode = actuatorMode;
+  outPayload.isPeriodical = isPeriodical;
+
+  switch(activeMode) {
+    case distance:
+      outPayload.sensorData = distL;
+      outPayload.sensorNumber = 0;
+      radio.write(&outPayload, sizeof(outPayload));
+
+      outPayload.sensorData = distC;
+      outPayload.sensorNumber = 1;
+      radio.write(&outPayload, sizeof(outPayload));
+
+      outPayload.sensorData = distR;
+      outPayload.sensorNumber = 2;
+      radio.write(&outPayload, sizeof(outPayload));
+      break;
+    case photocell:
+      outPayload.sensorData = luxBrightness;
+      outPayload.sensorNumber = 3;
+      radio.write(&outPayload, sizeof(outPayload));
+      break;
+    case compass:
+      outPayload.sensorData = compassHeading;
+      outPayload.sensorNumber = 4;
+      radio.write(&outPayload, sizeof(outPayload));
       break;
   }
 }
@@ -172,14 +288,15 @@ void runDistance() {
 }
 
 void runPhotocell() {
+  luxBrightness = photocellMap(analogRead(photocellPin)); 
   actuatorOutput(0, leftSet);
-  actuatorOutput(photocellMap(analogRead(photocellPin)), centerSet);
+  actuatorOutput(luxBrightness, centerSet);
   actuatorOutput(0, rightSet);
 }
 
 void runCompass() {
   mag.getEvent(&compassData);
-  compassHeading = atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI;
+  compassHeading = round(atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI);
 
   if(compassHeading < northBound && compassHeading > -northBound) {
     actuatorOutput(0, leftSet);

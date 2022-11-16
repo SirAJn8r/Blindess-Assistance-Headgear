@@ -32,7 +32,6 @@ sensorPayload outPayload;
 terminalRequestPayload inPayload;
 uint64_t startListeningTime, currentCycleTime;
 bool readNotWrite;
-uint32_t sendCount;
 
 void setup() {
   Serial.begin(9600);
@@ -69,7 +68,6 @@ void loop() {
       outPayload.activeMode = inPayload.activeMode;
       outPayload.actuatorMode = inPayload.actuatorMode;
       outPayload.isPeriodical = inPayload.isPeriodical;
-      sendCount = 0;
     }
   }
 
@@ -78,18 +76,15 @@ void loop() {
       readNotWrite = false;
       radio.stopListening();
     } else {
-      if(outPayload.isPeriodical || sendCount < 10) {
-        outPayload.sensorData = 1.23f;
-        outPayload.sensorNumber = 1;
-        radio.write(&outPayload, sizeof(outPayload));
-        sendCount++;
-      }
+      outPayload.sensorData = 1.23f;
+      outPayload.sensorNumber = 1;
+      radio.write(&outPayload, sizeof(outPayload));
     }
   }
 
   else {
     readNotWrite = true;
     radio.startListening();
-    startListeningTime = millis();    
+    startListeningTime = millis();
   }
 }

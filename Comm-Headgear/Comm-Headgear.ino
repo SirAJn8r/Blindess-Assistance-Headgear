@@ -93,7 +93,7 @@ struct terminalRequestPayload {
   uint8_t actuatorMode; // set/update the actuator mode
 }inPayload;
 
-uint64_t getDataTimer, startListeningTime, currentCycleTime;
+uint64_t currentDataCycle, startDataTime, currentCommCycle, startListeningTime;
 sensors_event_t compassData;
 int16_t distL, distC, distR, luxBrightness, compassHeading;
 bool isListening;
@@ -108,11 +108,10 @@ actuatorSet leftSet, centerSet, rightSet;
 RF24 radio(CE_PIN, CSN_PIN);
 Adafruit_LSM303_Mag_Unified mag(12345);
 
-void setup()
-{
+void setup() {
   distL = distC = distR = maxDistance;
   luxBrightness = compassHeading = 0;
-  getDataTimer = 0;
+  startDataTime = 0;
 
   activeMode = distance;
   actuatorMode = vibration;
@@ -136,12 +135,11 @@ void setup()
   pinMode(photocell, INPUT);
 
   Wire.begin();
-  radio.begin();
 
+  radio.begin();
   radio.setAutoAck(false); // append Ack packet
   radio.setDataRate(RF24_250KBPS); // transmission rate
   radio.setPALevel(RF24_PA_LOW); // distance and energy consump.
-
   radio.openWritingPipe(headToWristAddr);
   radio.openReadingPipe(0, wristToHeadAddr);
 
@@ -153,8 +151,9 @@ void setup()
   // mag.enableAutoRange(true);
 }
 
-void loop()
-{
+void loop() {
+  communicate();
+
   switch(activeMode) {
     case off:
       break;
@@ -168,19 +167,18 @@ void loop()
       runCompass();
       break;
   }
-  communicate();
 }
 
 void communicate() {
-  currentCycleTime = millis() - startListeningTime;
+  currentCommCycle = millis() - startListeningTime;
 
-  if (currentCycleTime < commCycleListenDelay) ;
+  if (currentCommCycle < commCycleListenDelay) ;
     // Delay so radio can start listening properly
-  else if (currentCycleTime < commCycleListenTime) {
+  else if (currentCommCycle < commCycleListenTime) {
     if(radio.available() > 0)
       readInPayload();
   }
-  else if (currentCycleTime < commCycleSendTime) {
+  else if (currentCommCycle < commCycleSendTime) {
     if(isListening) {    
       isListening = false;
       radio.stopListening();
@@ -238,24 +236,23 @@ void sendOutPayload() {
 }
 
 void runDistance() {
-  uint64_t millisS = millis();
+  currentDataCycle = millis() - startDataTime;
 
   // Collect distance data only from whoever's turn it is
-  if (millisS - getDataTimer > 99) {
-    getDataTimer = millisS;
+  if (currentDataCycle > 99) {
+    startDataTime = currentDataCycle;
 
-  } else if (millisS - getDataTimer > 66) {
+  } else if (currentDataCycle > 66) {
     if(tfl.getData(distL, leftTFL)) 
       actuatorOutput(bucketMap(distL), leftSet);   
 
-  } else if (millisS - getDataTimer > 33) {
+  } else if (currentDataCycle > 33) {
     if(tfl.getData(distC, centerTFL))
       actuatorOutput(bucketMap(distC), centerSet);
 
   } else {
     if (tfl.getData(distR, rightTFL))
       actuatorOutput(bucketMap(distR), rightSet); 
-
   }
 
   // If one is way closer than the other two, focus on it exclusively
@@ -271,7 +268,7 @@ void runDistance() {
     actuatorOutput(0, leftSet);
     actuatorOutput(0, centerSet);
   } 
-  // If two are way close than the last one, focus on them exclusively
+  // If two are way closer than the last one, focus on them exclusively
   else if (singleFar(distL, distC, distR)) {
     actuatorOutput(0, leftSet);
   }

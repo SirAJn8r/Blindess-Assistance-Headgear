@@ -64,13 +64,11 @@ struct sensorPayload {
   // For ack'ing
   uint8_t activeMode;
   uint8_t actuatorMode;
-  bool isPeriodical;
 }inPayload;
 
 struct terminalRequestPayload {
   uint8_t activeMode; // set/update the active mode
   uint8_t actuatorMode; // set/update the actuator mode
-  bool isPeriodical; // true = periodical, false = on-demand
 }outPayload;
 
 const byte headToWristAddr[6] = "00001";
@@ -194,7 +192,6 @@ void communicate() {
     else if(currentCycleTime < sendTime) {
       outPayload.activeMode = activeMode;
       outPayload.actuatorMode = actuatorMode;
-      outPayload.isPeriodical = true;
       radio.write(&outPayload, sizeof(outPayload));
     } 
     

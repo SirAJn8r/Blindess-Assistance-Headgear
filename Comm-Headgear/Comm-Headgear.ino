@@ -86,19 +86,17 @@ struct sensorPayload {
   // For ack'ing
   uint8_t activeMode;
   uint8_t actuatorMode;
-  bool isPeriodical;
 }outPayload;
 
 struct terminalRequestPayload {
   uint8_t activeMode; // set/update the active mode
   uint8_t actuatorMode; // set/update the actuator mode
-  bool isPeriodical; // true = periodical, false = on-demand
 }inPayload;
 
 uint64_t getDataTimer, startListeningTime, currentCycleTime;
 sensors_event_t compassData;
 int16_t distL, distC, distR, luxBrightness, compassHeading;
-bool isListening, isPeriodical;
+bool isListening;
 
 const byte headToWristAddr[6] = "00001";
 const byte wristToHeadAddr[6] = "00002";
@@ -198,12 +196,11 @@ void communicate() {
 
 void readInPayload() {
   radio.read(&inPayload, sizeof(inPayload));
-  
+
   if(validActiveMode(inPayload.activeMode))
     activeMode = inPayload.activeMode;
   if(validActuatorMode(inPayload.actuatorMode))
     actuatorMode = inPayload.actuatorMode;
-  isPeriodical = inPayload.isPeriodical;
 }
 
 void sendOutPayload() {
@@ -212,7 +209,6 @@ void sendOutPayload() {
 
   outPayload.activeMode = activeMode;
   outPayload.actuatorMode = actuatorMode;
-  outPayload.isPeriodical = isPeriodical;
 
   switch(activeMode) {
     case distance:

@@ -23,12 +23,11 @@ enum ActuatorMode {
 };
 
 struct sensorPayload {
-  int16_t sensorData;
-  uint8_t sensorNumber; //0-2 = left-right LiDAR, 3 = photocell, 4 = compass
-
-  // For ack'ing
   uint8_t activeMode;
   uint8_t actuatorMode;
+  int16_t data1;
+  int16_t optData2; // for center TFL, when in distance mode
+  int16_t optData3; // for right TFL, when in distance mode
 }inPayload;
 
 struct terminalRequestPayload {
@@ -82,7 +81,7 @@ bool readNotWrite, isListening;
 
 void setup() {  
   distL = distC = distR = luxBrightness = compassHeading = 0;
-  
+
   cs = 3;
   changeTimer = 10000;
 
@@ -197,20 +196,16 @@ void communicate() {
 
 void readInPayload() {
   radio.read(&inPayload, sizeof(inPayload));
-
-  //if (activeMode == inPayload.activeMode && actuatorMode == inPayload.actuatorMode)
   
-  switch(inPayload.sensorNumber) {
-    case 0:
-      distL = inPayload.sensorData; break;
-    case 1:
-      distC = inPayload.sensorData; break;
-    case 2:
-      distR = inPayload.sensorData; break;
-    case 3:
-      luxBrightness = inPayload.sensorData; break;
-    case 4:
-      compassHeading = inPayload.sensorData; break;
+  switch(inPayload.activeMode) {
+    case distance:
+      distL = inPayload.data1; break;
+      distC = inPayload.optData2; break;
+      distR = inPayload.optData3; break;
+    case photocell:
+      luxBrightness = inPayload.data1; break;
+    case compass:
+      compassHeading = inPayload.data1; break;
   }
 }
 

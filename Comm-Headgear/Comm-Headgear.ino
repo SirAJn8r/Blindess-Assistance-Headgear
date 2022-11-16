@@ -23,6 +23,9 @@
 #define leftVibMod 0.35 // adjust left vibrator power
 #define centerVibMod 0.55 // adjust center vibrator power
 #define rightVibMod 1 // adjust right vibrator power
+#define maxBuzz 10000
+#define minBuzz 100
+#define buzMap(n) map(n, 0, 255, minBuzz, maxBuzz)
 
 // Focus on distance(s) that are much closer than the other distance(s)
 #define closeFactor 0.5
@@ -80,12 +83,11 @@ typedef struct{
 }actuatorSet;
 
 struct sensorPayload {
-  int16_t sensorData;
-  uint8_t sensorNumber; //0-2 = left-right LiDAR, 3 = photocell, 4 = compass
-
-  // For ack'ing
   uint8_t activeMode;
   uint8_t actuatorMode;
+  int16_t data1;
+  int16_t optData2; // for center TFL, when in distance mode
+  int16_t optData3; // for right TFL, when in distance mode
 }outPayload;
 
 struct terminalRequestPayload {
@@ -210,43 +212,33 @@ void sendOutPayload() {
 
   switch(activeMode) {
     case distance:
-      outPayload.sensorData = distL;
-      outPayload.sensorNumber = 0;
-      radio.write(&outPayload, sizeof(outPayload));
-
-      outPayload.sensorData = distC;
-      outPayload.sensorNumber = 1;
-      radio.write(&outPayload, sizeof(outPayload));
-
-      outPayload.sensorData = distR;
-      outPayload.sensorNumber = 2;
-      radio.write(&outPayload, sizeof(outPayload));
+      outPayload.data1 = distL;
+      outPayload.optData2 = distC;
+      outPayload.optData3 = distR;
       break;
     case photocell:
-      outPayload.sensorData = luxBrightness;
-      outPayload.sensorNumber = 3;
-      radio.write(&outPayload, sizeof(outPayload));
+      outPayload.data1 = luxBrightness;
       break;
     case compass:
-      outPayload.sensorData = compassHeading;
-      outPayload.sensorNumber = 4;
-      radio.write(&outPayload, sizeof(outPayload));
+      outPayload.data1 = compassHeading;
       break;
   }
+  
+  radio.write(&outPayload, sizeof(outPayload));
 }
 
 void runDistance() {
   currentDataCycle = millis() - startDataTime;
 
   // Collect distance data only from whoever's turn it is
-  if (currentDataCycle > 99) {
+  if (currentDataCycle > 150) {
     startDataTime = currentDataCycle;
 
-  } else if (currentDataCycle > 66) {
+  } else if (currentDataCycle > 100) {
     if(tfl.getData(distL, leftTFL)) 
       actuatorOutput(bucketMap(distL), leftSet);   
 
-  } else if (currentDataCycle > 33) {
+  } else if (currentDataCycle > 50) {
     if(tfl.getData(distC, centerTFL))
       actuatorOutput(bucketMap(distC), centerSet);
 
@@ -315,11 +307,11 @@ void actuatorOutput(uint8_t output, actuatorSet actSet) {
       analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * output));
       break;
     case buzzer:
-      analogWrite(actSet.buz, output);
+      tone(actSet.buz, buzMap(output));
       break;
     case all:
       analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * output));
-      analogWrite(actSet.buz, output);
+      tone(actSet.buz, buzMap(output));
       break;
   }
 }

@@ -8,6 +8,16 @@
 #define listenDelay 50
 #define sendTime 150
 
+// Printing info
+#define cs 3 // compass shift
+#define backslashChar char(0)
+#define solidDotChar char(1)
+#define hollowDotChar char(2)
+#define rightArrowChar char(0b01111110)
+#define leftArrowChar char(0b01111111)
+#define degreeChar char(0b11011111)
+#define blackSquareChar char(0b11111111)
+
 enum ActiveMode{
   off = 0,
   distance,
@@ -74,8 +84,6 @@ byte customCharDotSel[8] = {
 uint64_t cycleStartTime, currentCycleTime;
 int16_t distL, distC, distR, lux, compassHeading; // lux = brightness
 bool readNotWrite, isListening;
-
-int cs = 3; // compass shift
 
 const byte headToWristAddr[6] = "00001";
 const byte wristToHeadAddr[6] = "00002";
@@ -192,11 +200,11 @@ void readInPayload() {
 
 void printAll() {
   lcd.setCursor(3,0);
-  lcd.print(char(0b01111111));
+  lcd.print(leftArrowChar);
   lcd.setCursor(9,0);
   lcd.print("^");
   lcd.setCursor(15,0);
-  lcd.print(char(0b01111110));
+  lcd.print(rightArrowChar);
   
   String dist1 = String(distL);
   int cursor1 = 4 - dist1.length();
@@ -235,16 +243,16 @@ void printAll() {
   String degS = String(compassHeading);
   lcd.setCursor(13,2);
   lcd.print(degS);
-  lcd.print(char(0b11011111));
+  lcd.print(degreeChar);
   lcd.print("  ");
   
 
   
   lcd.setCursor(15,3);
-  lcd.print(char(1));
-  lcd.print(char(0));
-  lcd.print(char(0));
-  lcd.print(char(0));
+  lcd.print(solidDotChar);
+  lcd.print(backslashChar);
+  lcd.print(backslashChar);
+  lcd.print(backslashChar);
 }
 
 void printPhotoCell() {
@@ -260,25 +268,25 @@ void printPhotoCell() {
   lcd.setCursor(4,1);
   lcd.print("|");
   for (int i = 0 ; i < bars; i++)
-    lcd.print(char(0b11111111));
+    lcd.print(blackSquareChar);
   for (int i = bars ; i <= 9; i++)
     lcd.print(" ");
   lcd.print("|");
 
   lcd.setCursor(15,3);
-  lcd.print(char(0));
-  lcd.print(char(0));
-  lcd.print(char(0));
-  lcd.print(char(1));
+  lcd.print(backslashChar);
+  lcd.print(backslashChar);
+  lcd.print(backslashChar);
+  lcd.print(solidDotChar);
 }
 
 void printLidar() {
   lcd.setCursor(3,0);
-  lcd.print(char(0b01111111));
+  lcd.print(leftArrowChar);
   lcd.setCursor(9,0);
   lcd.print("^");
   lcd.setCursor(15,0);
-  lcd.print(char(0b01111110));
+  lcd.print(rightArrowChar);
 
   String dist1 = String(distL);
   int cursor1 = 4 - dist1.length();
@@ -299,10 +307,10 @@ void printLidar() {
   lcd.print("cm");
 
   lcd.setCursor(15,3);
-  lcd.print(char(0));
-  lcd.print(char(1));
-  lcd.print(char(0));
-  lcd.print(char(0));
+  lcd.print(backslashChar);
+  lcd.print(solidDotChar);
+  lcd.print(backslashChar);
+  lcd.print(backslashChar);
 }
 
 void printCompass() {
@@ -311,7 +319,7 @@ void printCompass() {
   String degS = String((compassHeading/10) * 10);
   lcd.setCursor(13,1);
   lcd.print(degS);
-  lcd.print(char(0b11011111));
+  lcd.print(degreeChar);
   lcd.print("  ");
 
   // direction
@@ -356,7 +364,7 @@ void printCompass() {
     lcd.print("     ");
     lcd.setCursor(cs + 1,2);
     lcd.print("   ");
-    lcd.print(char(2));
+    lcd.print(degreeChar);
     lcd.print(" ");
     lcd.setCursor(cs + 2,3);
     lcd.print("   ");
@@ -378,7 +386,7 @@ void printCompass() {
     lcd.print("   ");
     lcd.setCursor(cs + 1,1);
     lcd.print(" ");
-    lcd.print(char(2));
+    lcd.print(degreeChar);
     lcd.print("   ");
     lcd.setCursor(cs + 1,2);
     lcd.print("     ");
@@ -409,17 +417,17 @@ void printCompass() {
   }
 
   lcd.setCursor(15,3);
-  lcd.print(char(0));
-  lcd.print(char(0));
-  lcd.print(char(1));
-  lcd.print(char(0));
+  lcd.print(backslashChar);
+  lcd.print(backslashChar);
+  lcd.print(solidDotChar);
+  lcd.print(backslashChar);
 }
 
 void printCompassOutline() {
   lcd.setCursor(cs + 1,0);
   lcd.print("/");
   lcd.setCursor(cs + 5,0);
-  lcd.print(char(2));
+  lcd.print(degreeChar);
   lcd.setCursor(cs,1);
   lcd.print("|");
   lcd.setCursor(cs + 6,1);
@@ -429,7 +437,7 @@ void printCompassOutline() {
   lcd.setCursor(cs + 6,2);
   lcd.print("|");
   lcd.setCursor(cs + 1,3);
-  lcd.print(char(2));
+  lcd.print(degreeChar);
   lcd.setCursor(cs + 5,3);
   lcd.print("/");
 }

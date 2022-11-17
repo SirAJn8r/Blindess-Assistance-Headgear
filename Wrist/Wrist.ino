@@ -8,6 +8,20 @@
 #define listenDelay 50
 #define sendTime 150
 
+enum ActiveMode{
+  off = 0,
+  distance,
+  photocell,
+  compass,
+};
+
+enum ActuatorMode {
+  none = 0,
+  vibration,
+  buzzer,
+  all,
+};
+
 struct sensorPayload {
   float sensorData;
   float data2;
@@ -65,19 +79,25 @@ byte customCharDotSel[8] = {
 uint64_t cycleStartTime, currentCycleTime;
 bool readNotWrite, isListening;
 
-int mode = 0;  // lcd report mode
-int dist[3] = {0,0,0}; // Left LiDar
-int deg = 0;   // Compass angle
-int lux = 0;   // brightness
-int cs = 3;    // compass shift
+int deg = 0; // Compass angle
+int lux = 0; // brightness
+int cs = 3; // compass shift
+
+int dist[3] = {0,0,0};
 
 const byte headToWristAddr[6] = "00001";
 const byte wristToHeadAddr[6] = "00002";
+
+ActiveMode activeMode;
+ActuatorMode actuatorMode;
 
 RF24 radio(CE_PIN, CSN_PIN);
 LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
 void setup() {
+  activeMode = distance;
+  actuatorMode = vibration;
+
   Serial.begin(9600);
   while(!radio.begin()) Serial.println("failed wiring");
   Serial.println("wiring valid");
@@ -95,9 +115,9 @@ void setup() {
 
   lcd.init();
   lcd.backlight();
-  lcd.createChar(0, customCharDot); // create a new custom character
-  lcd.createChar(1, customCharDotSel); // create a new custom character
-  lcd.createChar(2, backSlash); // create a new custom character
+  lcd.createChar(0, customCharDot);
+  lcd.createChar(1, customCharDotSel);
+  lcd.createChar(2, backSlash);
   lcd.setCursor(3,0);
 
   pinMode(6, OUTPUT);
@@ -107,7 +127,7 @@ void setup() {
 void loop() {
   communicate();
 
-  switch(mode) {
+  switch(activeMode) {
     case 0: printAll(); break;
     case 1: printLidar(); break;
     case 2: printPhotoCell(); break;
@@ -138,8 +158,8 @@ void communicate() {
     }
     
     else if(currentCycleTime < sendTime) {
-      outPayload.activeMode = 1;
-      outPayload.actuatorMode = 1;
+      outPayload.activeMode = activeMode;
+      outPayload.actuatorMode = actuatorMode;
       //radio.write(&outPayload, sizeof(outPayload));
     } 
     

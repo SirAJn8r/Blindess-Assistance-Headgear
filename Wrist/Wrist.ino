@@ -48,8 +48,6 @@ struct terminalRequestPayload {
   uint8_t actuatorMode; // set/update the actuator mode
 }outPayload;
 
-
-// LCD STUFF -----------------
 byte backSlash[8] = {
   0b00000,
   0b10000,
@@ -364,7 +362,7 @@ void printCompass() {
     lcd.print("     ");
     lcd.setCursor(cs + 1,2);
     lcd.print("   ");
-    lcd.print(degreeChar);
+    lcd.print(hollowDotChar);
     lcd.print(" ");
     lcd.setCursor(cs + 2,3);
     lcd.print("   ");
@@ -386,7 +384,7 @@ void printCompass() {
     lcd.print("   ");
     lcd.setCursor(cs + 1,1);
     lcd.print(" ");
-    lcd.print(degreeChar);
+    lcd.print(hollowDotChar);
     lcd.print("   ");
     lcd.setCursor(cs + 1,2);
     lcd.print("     ");
@@ -427,7 +425,7 @@ void printCompassOutline() {
   lcd.setCursor(cs + 1,0);
   lcd.print("/");
   lcd.setCursor(cs + 5,0);
-  lcd.print(degreeChar);
+  lcd.print(hollowDotChar);
   lcd.setCursor(cs,1);
   lcd.print("|");
   lcd.setCursor(cs + 6,1);
@@ -437,7 +435,7 @@ void printCompassOutline() {
   lcd.setCursor(cs + 6,2);
   lcd.print("|");
   lcd.setCursor(cs + 1,3);
-  lcd.print(degreeChar);
+  lcd.print(hollowDotChar);
   lcd.setCursor(cs + 5,3);
   lcd.print("/");
 }

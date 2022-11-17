@@ -5,14 +5,8 @@
 
 #define CE_PIN 7
 #define CSN_PIN 8
-#define commCycleListenDelay 50
-#define commCycleListenTime 200 // 150 + listenDelay
-#define commCycleSendTime 250 // 50 + listenTime + listenDelay
-
-// RADIO stuff -------------------
-RF24 radio(CE_PIN, CSN_PIN);
-const byte headToWristAddr[6] = "00001";
-const byte wristToHeadAddr[6] = "00002";
+#define listenDelay 50
+#define sendTime 150
 
 struct sensorPayload {
   float sensorData;
@@ -26,18 +20,14 @@ struct sensorPayload {
   uint8_t activeMode;
   uint8_t actuatorMode;
   bool isPeriodical;
-};
+}inPayload;
 
 struct terminalRequestPayload {
   uint8_t activeMode; // set/update the active mode
   uint8_t actuatorMode; // set/update the actuator mode
   bool isPeriodical; // true = periodical, false = on-demand
-};
+}outPayload;
 
-sensorPayload inPayload;
-terminalRequestPayload outPayload;
-uint64_t startListeningTime, currentCycleTime;
-bool readNotWrite;
 
 // LCD STUFF -----------------
 byte backSlash[8] = {
@@ -72,16 +62,22 @@ byte customCharDotSel[8] = {
   0b00000
 };
 
+uint64_t cycleStartTime, currentCycleTime;
+bool readNotWrite, isListening;
+
 int mode = 0;  // lcd report mode
 int dist[3] = {0,0,0}; // Left LiDar
 int deg = 0;   // Compass angle
 int lux = 0;   // brightness
 int cs = 3;    // compass shift
 
+const byte headToWristAddr[6] = "00001";
+const byte wristToHeadAddr[6] = "00002";
+
+RF24 radio(CE_PIN, CSN_PIN);
 LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
 void setup() {
-  // Radio stuff -------------
   Serial.begin(9600);
   while(!radio.begin()) Serial.println("failed wiring");
   Serial.println("wiring valid");
@@ -89,17 +85,15 @@ void setup() {
   radio.setAutoAck(false); // append Ack packet
   radio.setDataRate(RF24_250KBPS); // transmission rate
   radio.setPALevel(RF24_PA_LOW); // distance and energy consump.
-
   radio.openWritingPipe(wristToHeadAddr);
   radio.openReadingPipe(0, headToWristAddr);
 
-  readNotWrite = false;
-  radio.stopListening();
-  startListeningTime = millis() + commCycleListenTime;
+  readNotWrite = true;
+  isListening = true;
+  radio.startListening();
+  cycleStartTime = millis();
 
-  // LCD stuff ------------
-  lcd.init();                      // initialize the lcd 
-  // Print a message to the LCD.
+  lcd.init();
   lcd.backlight();
   lcd.createChar(0, customCharDot); // create a new custom character
   lcd.createChar(1, customCharDotSel); // create a new custom character
@@ -107,22 +101,80 @@ void setup() {
   lcd.setCursor(3,0);
 
   pinMode(6, OUTPUT);
-  digitalWrite(6, LOW);m
+  digitalWrite(6, LOW);
 }
 
 void loop() {
   communicate();
-  if (mode == 0){
-    printAll();
-  } else if (mode == 1){
-    printLidar();
-  } else if (mode == 2){
-    printCompass();
-  } else if (mode == 3){
-    printPhotoCell();
+
+  switch(mode) {
+    case 0: printAll(); break;
+    case 1: printLidar(); break;
+    case 2: printPhotoCell(); break;
+    case 3: printCompass(); break;
   }
 }
 
+void communicate() {
+  currentCycleTime = millis() - cycleStartTime;
+
+  if (readNotWrite) {
+    if(!isListening) {
+      radio.startListening();
+      cycleStartTime = millis();
+      isListening = true;
+    } 
+    
+    else if (currentCycleTime > listenDelay) {
+      if(radio.available() > 0)
+        readInPayload();
+    }
+  
+  } else {
+    if (isListening) {
+      radio.stopListening();
+      cycleStartTime = millis();
+      isListening = false;
+    }
+    
+    else if(currentCycleTime < sendTime) {
+      outPayload.activeMode = 1;
+      outPayload.actuatorMode = 1;
+      //radio.write(&outPayload, sizeof(outPayload));
+    } 
+    
+    else
+      readNotWrite = true;
+  }
+}
+
+void readInPayload() {
+  radio.read(&inPayload, sizeof(inPayload));
+
+  dist[0] = inPayload.sensorData;
+  dist[1] = inPayload.data2;
+  dist[2] = inPayload.data3;
+  lux = inPayload.data4;
+  deg = inPayload.data5;
+
+  /*
+  Serial.print("  Active mode is ");
+  Serial.print(inPayload.activeMode);
+  Serial.print("  Actuator mode is ");
+  Serial.print(inPayload.actuatorMode);
+  */
+  
+  Serial.print("l Data is ");
+  Serial.print(dist[0]);
+  Serial.print("  c Data is ");
+  Serial.print(dist[1]);
+  Serial.print("  r Data is ");
+  Serial.print(dist[2]);
+  Serial.print("  lux is ");
+  Serial.print(lux);
+  Serial.print("  deg is ");
+  Serial.println(deg);
+}
 
 void printAll() {
   lcd.setCursor(3,0);
@@ -349,7 +401,7 @@ void printCompass() {
   lcd.print(char(0));
 }
 
-void printCompassOutline(){
+void printCompassOutline() {
   lcd.setCursor(cs + 1,0);
   lcd.print("/");
   lcd.setCursor(cs + 5,0);
@@ -366,80 +418,4 @@ void printCompassOutline(){
   lcd.print(char(2));
   lcd.setCursor(cs + 5,3);
   lcd.print("/");
-}
-
-
-
-// Radio Communication function
-void communicate(){
-  currentCycleTime = millis() - startListeningTime;
-
-  if (currentCycleTime < commCycleListenDelay) {
-    // wait
-  }
-
-  else if (currentCycleTime < commCycleListenTime) {
-    if(radio.available() > 0) {
-      radio.read(&inPayload, sizeof(inPayload));
-
-      /*
-      Serial.print("Sensor Data is ");
-      Serial.print(inPayload.sensorData);
-      Serial.print("  Sensor Number is ");
-      Serial.print(inPayload.sensorNumber);
-      Serial.print("  Active mode is ");
-      Serial.print(inPayload.activeMode);
-      Serial.print("  Actuator mode is ");
-      Serial.print(inPayload.actuatorMode);
-      Serial.print("  isPeriodical is ");
-      Serial.println(inPayload.isPeriodical);*/
-
-      dist[0] = inPayload.sensorData;
-      dist[1] = inPayload.data2;
-      dist[2] = inPayload.data3;
-      lux = inPayload.data4;
-      deg = inPayload.data5;
-      /*
-      if (inPayload.sensorNumber >= 0 && inPayload.sensorNumber <= 2){
-        // is a lidar sensor
-        dist[inPayload.sensorNumber] = inPayload.sensorData;
-      } else if (inPayload.sensorNumber == 3) {
-        lux = inPayload.sensorData;
-      }else if (inPayload.sensorNumber == 4) {
-        deg = inPayload.sensorData;
-      } else {
-        Serial.print("sensor number unknown");
-        Serial.println(String(inPayload.sensorNumber));
-      }*/
-      
-      Serial.print("l Data is ");
-      Serial.print(dist[0]);
-      Serial.print("  c Data is ");
-      Serial.print(dist[1]);
-      Serial.print("  r Data is ");
-      Serial.print(dist[2]);
-      Serial.print("  lux is ");
-      Serial.print(lux);
-      Serial.print("  deg is ");
-      Serial.println(deg);
-    }
-  }
-
-  else if (currentCycleTime < commCycleSendTime) {
-    if(readNotWrite) {    
-      readNotWrite = false;
-      radio.stopListening();
-    } else {
-      outPayload.activeMode = 0;
-      outPayload.actuatorMode = 5;
-      outPayload.isPeriodical = true;
-      //radio.write(&outPayload, sizeof(outPayload));
-    }
-  }
-
-  else {
-    readNotWrite = true;
-    radio.startListening();
-    startListeningTime = millis();    
-  }
 }

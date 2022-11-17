@@ -81,23 +81,19 @@ typedef struct{
 }actuatorSet;
 
 struct sensorPayload {
-  float sensorData;
-  float data2;
-  float data3;
-  float data4;
-  float data5;
-  uint8_t sensorNumber; //0-2 = left-right LiDAR, 3 = photocell, 4 = compass
+  int16_t data1;
+  int16_t data2;
+  int16_t data3;
+  int16_t data4;
+  int16_t data5;
 
-  // For ack'ing
   uint8_t activeMode;
   uint8_t actuatorMode;
-  bool isPeriodical;
 }outPayload;
 
 struct terminalRequestPayload {
   uint8_t activeMode; // set/update the active mode
   uint8_t actuatorMode; // set/update the actuator mode
-  bool isPeriodical;
 }inPayload;
 
 uint64_t currentDataCycleTime, startDataTime, currentCommCycleTime, startListeningTime;
@@ -107,7 +103,6 @@ bool isListening;
 
 const byte headToWristAddr[6] = "00001";
 const byte wristToHeadAddr[6] = "00002";
-float data[5] = {0,0,0,0,0}; //0-2 = left-right LiDAR, 3 = photocell, 4 = compass
 
 TFLI2C tfl;
 ActiveMode activeMode;
@@ -120,7 +115,6 @@ Adafruit_LSM303_Mag_Unified mag(12345);
 void setup() {
   distL = distC = distR = maxDistance;
   lux = compassHeading = 0;
-  startDataTime = 0;
 
   activeMode = distance;
   actuatorMode = vibration;
@@ -160,12 +154,7 @@ void setup() {
 
   isListening = true;
   radio.startListening();
-  startListeningTime = millis();
-
-  outPayload.data2 = 1;
-  outPayload.data3 = 2;
-  outPayload.data4 = 3;
-  outPayload.data5 = 4;
+  startDataTime = startListeningTime = millis();
 
   pinMode(30, OUTPUT);
   pinMode(32, OUTPUT);
@@ -179,34 +168,22 @@ void loop() {
   communicate();
 
   switch(activeMode) {
-    case off:
-      break;
-    case distance:
-      runDistance();
-      break;
-    case photocell:
-      runPhotocell();
-      break;
-    case compass:
-      runCompass();
-      break;
+    case off: break;
+    case distance: runDistance(); break;
+    case photocell: runPhotocell(); break;
+    case compass: runCompass(); break;
   }
 
-  data[0] = float(distL);
-  data[1] = float(distC);  
-  data[2] = float(distR);
-  data[3] = float(compassHeading);
-  data[4] = float(lux);
   Serial.print(" 1 ");
-  Serial.print(data[0]);
+  Serial.print(distL);
   Serial.print(" 2 ");
-  Serial.print(data[1]);
+  Serial.print(distC);
   Serial.print(" 3 ");
-  Serial.print(data[2]);
+  Serial.print(distR);
   Serial.print(" 4 ");
-  Serial.print(data[3]);
+  Serial.print(compassHeading);
   Serial.print(" 5 ");
-  Serial.println(data[4]);
+  Serial.println(lux);
 }
 
 void communicate() {
@@ -247,11 +224,11 @@ void readInPayload() {
 }
 
 void sendOutPayload() {
-  outPayload.sensorData = data[0];
-  outPayload.data2 = data[1];
-  outPayload.data3 = data[2];
-  outPayload.data4 = data[3];
-  outPayload.data5 = data[4];
+  outPayload.data1 = distL;
+  outPayload.data2 = distC;
+  outPayload.data3 = distR;
+  outPayload.data4 = compassHeading;
+  outPayload.data5 = lux;
   
   radio.write(&outPayload, sizeof(outPayload));
 }

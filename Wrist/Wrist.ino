@@ -6,7 +6,7 @@
 #define CE_PIN 7
 #define CSN_PIN 8
 #define listenDelay 50
-#define sendTime 150
+#define sendTime 4000
 
 // Printing info
 #define cs 3 // compass shift
@@ -95,7 +95,7 @@ LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars
 void setup() {
   distL = distC = distR = lux = compassHeading = 0;
 
-  activeMode = distance;
+  activeMode = off;
   actuatorMode = vibration;
 
   Serial.begin(9600);
@@ -119,9 +119,6 @@ void setup() {
   lcd.createChar(1, customCharDotSel);
   lcd.createChar(2, backSlash);
   lcd.setCursor(3,0);
-
-  pinMode(6, OUTPUT);
-  digitalWrite(6, LOW);
 }
 
 void loop() {
@@ -160,7 +157,7 @@ void communicate() {
     else if(currentCycleTime < sendTime) {
       outPayload.activeMode = activeMode;
       outPayload.actuatorMode = actuatorMode;
-      //radio.write(&outPayload, sizeof(outPayload));
+      radio.write(&outPayload, sizeof(outPayload));
     } 
     
     else
@@ -174,8 +171,8 @@ void readInPayload() {
   distL = inPayload.data1;
   distC = inPayload.data2;
   distR = inPayload.data3;
-  lux = inPayload.data4;
-  compassHeading = inPayload.data5;
+  compassHeading = inPayload.data4;
+  lux = inPayload.data5;
 
   /*
   Serial.print("  Active mode is ");
@@ -278,7 +275,7 @@ void printPhotoCell() {
   lcd.print(solidDotChar);
 }
 
-void printLidar() {
+void printLidar22() {
   lcd.setCursor(3,0);
   lcd.print(leftArrowChar);
   lcd.setCursor(9,0);
@@ -309,6 +306,100 @@ void printLidar() {
   lcd.print(solidDotChar);
   lcd.print(backslashChar);
   lcd.print(backslashChar);
+}
+
+void printLidar() {
+  lcd.setCursor(9,3);
+  lcd.print(blackSquareChar);
+
+  //left wall
+  int b = getDistBucket4(distL);
+  int row = 3 - b;
+  if (row >= 0){
+    lcd.setCursor(8 - b, row);
+    lcd.print("/");
+    for (int i = 0; i < row; i++) {
+      lcd.setCursor(8 - (3 - i), i);
+      lcd.print(" ");
+    }
+    for (int i = 3; i > row; i--) {
+      lcd.setCursor(8 - (3 - i), i);
+      lcd.print(" ");
+    }
+  }
+  
+  //middle wall
+  b = getDistBucket4(distC);
+  row = 2 - b;
+  if (row >= 0){
+    lcd.setCursor(9,row);
+    lcd.print("_");
+    for (int i = 0; i < row; i++) {
+      lcd.setCursor(9,i);
+      lcd.print(" ");
+    }
+    for (int i = 2; i > row; i--) {
+      lcd.setCursor(9,i);
+      lcd.print(" ");
+    }
+  }
+
+  
+  //right wall
+  b = getDistBucket4(distR);
+  row = 3 - b;
+  if (row >= 0){
+    lcd.setCursor(10 + b, row);
+    lcd.print(char(2));
+    for (int i = 0; i < row; i++) {
+      lcd.setCursor(10 + (3 - i), i);
+      lcd.print(" ");
+    }
+    for (int i = 3; i > row; i--) {
+      lcd.setCursor(10 + (3 - i), i);
+      lcd.print(" ");
+    }
+  }
+  /*
+  lcd.setCursor(3,0);
+  lcd.print(char(0b01111111));
+  lcd.setCursor(9,0);
+  lcd.print("^");
+  lcd.setCursor(15,0);
+  lcd.print(char(0b01111110));
+
+  String dist1 = String(dist[0]);
+  int cursor1 = 4 - dist1.length();
+  lcd.setCursor(cursor1, 1);
+  lcd.print(dist1);
+  lcd.print("cm");
+
+  String dist2 = String(dist[1]);
+  int cursor2 = 10 - dist2.length();
+  lcd.setCursor(cursor2, 1);
+  lcd.print(dist2);
+  lcd.print("cm");
+
+  String dist3 = String(dist[2]);
+  int cursor3 = 16 - dist3.length();
+  lcd.setCursor(cursor3, 1);
+  lcd.print(dist3);
+  lcd.print("cm");
+  */
+
+  lcd.setCursor(15,3);
+  lcd.print(backslashChar);
+  lcd.print(solidDotChar);
+  lcd.print(backslashChar);
+  lcd.print(backslashChar);
+}
+
+int getDistBucket4(int dist){
+  if (dist < 50) return 0;
+  if (dist < 100) return 1;
+  if (dist < 200) return 2;
+  if (dist < 300) return 3;
+  return 4;
 }
 
 void printCompass() {

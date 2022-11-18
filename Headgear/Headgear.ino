@@ -44,7 +44,7 @@
 #define minLux 10
 #define maxLux 1000
 #define withinLuxBounds(lux) ((lux < minLux ? minLux : lux) > maxLux ? maxLux : lux)
-#define photocellMap(lux) map(withinLuxBounds(lux), maxLux, minLux, 0, 255)
+#define photocellMap(lux) map(withinLuxBounds(lux), minLux, maxLux, 0, 255)
 
 // Compass
 #define compassAddr 0x20
@@ -53,7 +53,7 @@
 //Communication
 #define commCycleListenDelay 50
 #define commCycleListenTime 100 // 50 + listenDelay
-#define commCycleSendTime 1250 // 150 + listenTime + listenDelay
+#define commCycleSendTime 500 // 400 + listenTime + listenDelay
 
 #define activeModeSize 4
 #define actuatorModeSize 4
@@ -117,7 +117,7 @@ void setup() {
   distL = distC = distR = maxDistance;
   lux = compassHeading = 0;
 
-  activeMode = distance;
+  activeMode = photocell;
   actuatorMode = vibration;
   
   leftSet.vib = leftVib;
@@ -139,7 +139,7 @@ void setup() {
   pinMode(photocell, INPUT);
 
   Serial.begin(9600);
-  while(!Wire.begin()) Serial.println("Cannot establish wire library");
+  Wire.begin();
   while(!mag.begin()) Serial.println("Cannot connect to compass");
   while(!radio.begin()) Serial.println("Cannot connect to radio");
   Serial.println("Wire, Compass, and Radio connections made.");
@@ -155,13 +155,6 @@ void setup() {
   isListening = true;
   radio.startListening();
   startDataTime = startListeningTime = millis();
-
-  pinMode(30, OUTPUT);
-  pinMode(32, OUTPUT);
-  pinMode(34, OUTPUT);
-  digitalWrite(30, HIGH);
-  digitalWrite(32, HIGH);  
-  digitalWrite(34, HIGH);
 }
 
 void loop() {
@@ -193,6 +186,7 @@ void communicate() {
   if (currentCommCycleTime < commCycleListenDelay) ;
     // Delay so radio can start listening properly
   else if (currentCommCycleTime < commCycleListenTime) {
+    Serial.print(" Listening ");
     if(radio.available() > 0)
       readInPayload();
   }

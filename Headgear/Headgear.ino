@@ -18,14 +18,12 @@
 #define leftBuz 6 // pin for left-side buzzer
 #define centerBuz 7 // pin for center buzzer
 #define rightBuz 8 // pin for right buzzer
+#define minBuz 100
+#define maxBuz 10000
+#define buzMap(val) map(val, 0, 255, minBuz, maxBuz)
 
 #define CE_PIN 9
 #define CSN_PIN 10
-
-// Vibration motor power adjustments if needed (don't go above 1)
-#define leftVibMod 1 // adjust left vibrator power
-#define centerVibMod 1 // adjust center vibrator power
-#define rightVibMod 1 // adjust right vibrator power
 
 // Focus on distance(s) that are much closer than the other distance(s)
 #define closeFactor 0.5
@@ -48,7 +46,8 @@
 
 // Compass
 #define compassAddr 0x20
-#define northBound 10 // how many degrees off from north still counts
+#define northBound 15 // how many degrees off from north still counts
+#define compassAdjust -50
 
 //Communication
 #define commCycleListenDelay 50
@@ -61,7 +60,7 @@
 #define validActuatorMode(n) (n >= 0 && n < actuatorModeSize)
 
 enum ActiveMode{
-  off = 0,
+  readAll = 0,
   distance,
   photocell,
   compass,
@@ -78,18 +77,17 @@ enum ActuatorMode {
 typedef struct{
   uint8_t vib;
   uint8_t buz;
-  float vibModifier;
 }actuatorSet;
 
 struct sensorPayload {
-  int16_t data1;
-  int16_t data2;
-  int16_t data3;
-  int16_t data4;
-  int16_t data5;
+  int16_t distL;
+  int16_t distC;
+  int16_t distR;
+  int16_t compassHeading;
+  int16_t lux;
 
-  uint8_t activeMode;
-  uint8_t actuatorMode;
+  ActiveMode activeMode;
+  ActuatorMode actuatorMode;
 }outPayload;
 
 struct terminalRequestPayload {
@@ -117,18 +115,15 @@ void setup() {
   distL = distC = distR = maxDistance;
   lux = compassHeading = 0;
 
-  activeMode = photocell;
+  activeMode = readAll;
   actuatorMode = vibration;
   
   leftSet.vib = leftVib;
   leftSet.buz = leftBuz;
-  leftSet.vibModifier = leftVibMod;
   centerSet.vib = centerVib;
   centerSet.buz = centerBuz;
-  centerSet.vibModifier = centerVibMod;
   rightSet.vib = rightVib;
   rightSet.buz = rightBuz;
-  rightSet.vibModifier = rightVibMod;
 
   pinMode(leftVib, OUTPUT);
   pinMode(centerVib, OUTPUT);
@@ -161,7 +156,7 @@ void loop() {
   communicate();
 
   switch(activeMode) {
-    case off: break;
+    case readAll: readAllSensors(); break;
     case distance: runDistance(); break;
     case photocell: runPhotocell(); break;
     case compass: runCompass(); break;
@@ -212,6 +207,7 @@ void readInPayload() {
   if(validActuatorMode(inPayload.actuatorMode))
     actuatorMode = inPayload.actuatorMode;
 
+  // Debugging
   Serial.print("Set active mode to ");
   Serial.println(inPayload.activeMode);
   Serial.print("Set actuator mode to ");
@@ -219,70 +215,84 @@ void readInPayload() {
 }
 
 void sendOutPayload() {
-  outPayload.data1 = distL;
-  outPayload.data2 = distC;
-  outPayload.data3 = distR;
-  outPayload.data4 = compassHeading;
-  outPayload.data5 = lux;
+  outPayload.distL = distL;
+  outPayload.distC = distC;
+  outPayload.distR = distR;
+  outPayload.compassHeading = compassHeading;
+  outPayload.lux = lux;
   
   radio.write(&outPayload, sizeof(outPayload));
 }
 
-void runDistance() {
+void readAllSensors() {
+  readDistance();
+  lux = analogRead(photocellPin);
+  
+  mag.getEvent(&compassData);
+  compassHeading = round(atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI) + compassAdjust;
+}
+
+void readDistance() {
   currentDataCycleTime = millis() - startDataTime;
 
   // Collect distance data only from whoever's turn it is
-  if (currentDataCycleTime > 150) {
+  if (currentDataCycleTime > 150)
     startDataTime = millis();
-  } 
-  else if (currentDataCycleTime > 100) {
-    if(tfl.getData(distL, leftTFL)) 
-      actuatorOutput(bucketMap(distL), leftSet);   
-  } 
-  else if (currentDataCycleTime > 50) {
-    if(tfl.getData(distC, centerTFL))
-      actuatorOutput(bucketMap(distC), centerSet);
-  } 
-  else {
-    if (tfl.getData(distR, rightTFL))
-      actuatorOutput(bucketMap(distR), rightSet); 
-  }
-  
+  else if (currentDataCycleTime > 100)
+    tfl.getData(distL, leftTFL);   
+  else if (currentDataCycleTime > 50)
+    tfl.getData(distC, centerTFL);
+  else
+    tfl.getData(distR, rightTFL);
+}
+
+void runDistance() {
+  readDistance();
+
   // If one is way closer than the other two, focus on it exclusively
   if (singleClose(distL, distC, distR)) {
+    actuatorOutput(bucketMap(distL), leftSet);   
     actuatorOutput(0, centerSet);
     actuatorOutput(0, rightSet);
   } 
   else if (singleClose(distC, distL, distR)) {
     actuatorOutput(0, leftSet);
+    actuatorOutput(bucketMap(distC), centerSet);
     actuatorOutput(0, rightSet);
   } 
   else if (singleClose(distR, distL, distC)) {    
     actuatorOutput(0, leftSet);
     actuatorOutput(0, centerSet);
+    actuatorOutput(bucketMap(distR), rightSet);
   } 
   // If two are way close than the last one, focus on them exclusively
   else if (singleFar(distL, distC, distR)) {
     actuatorOutput(0, leftSet);
+    actuatorOutput(bucketMap(distC), centerSet);
+    actuatorOutput(bucketMap(distR), rightSet);
   }
   else if (singleFar(distC, distL, distR)) {
+    actuatorOutput(bucketMap(distL), leftSet);   
     actuatorOutput(0, centerSet);
+    actuatorOutput(bucketMap(distR), rightSet);
   }
   else if (singleFar(distR, distL, distC)) {
+    actuatorOutput(bucketMap(distL), leftSet);   
+    actuatorOutput(bucketMap(distC), centerSet);    
     actuatorOutput(0, rightSet);
   }
 }
 
 void runPhotocell() {
-  lux = photocellMap(analogRead(photocellPin));
+  lux = analogRead(photocellPin);
   actuatorOutput(0, leftSet);
-  actuatorOutput(lux, centerSet);
+  actuatorOutput(photocellMap(lux), centerSet);
   actuatorOutput(0, rightSet);
 }
 
 void runCompass() {
   mag.getEvent(&compassData);
-  compassHeading = round(atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI);
+  compassHeading = round(atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI) + compassAdjust;
 
   if(compassHeading < northBound && compassHeading > -northBound) {
     actuatorOutput(0, leftSet);
@@ -305,14 +315,14 @@ void actuatorOutput(uint8_t output, actuatorSet actSet) {
     case none:
       break;
     case vibration:
-      analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * output));
+      analogWrite(actSet.vib, output);
       break;
     case buzzer:
-      tone(actSet.buz, map(output, 0, 255, 100, 10000));
+      tone(actSet.buz, buzMap(output));
       break;
     case all:
-      analogWrite(actSet.vib, (uint8_t)(actSet.vibModifier * output));
-      tone(actSet.buz, map(output, 0, 255, 100, 10000));
+      analogWrite(actSet.vib, output);
+      tone(actSet.buz, buzMap(output));
       break;
   }
 }

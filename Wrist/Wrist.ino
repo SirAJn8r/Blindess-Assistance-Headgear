@@ -19,7 +19,7 @@
 #define blackSquareChar char(0b11111111)
 
 enum ActiveMode{
-  off = 0,
+  readAll = 0,
   distance,
   photocell,
   compass,
@@ -39,8 +39,8 @@ struct sensorPayload {
   int16_t data4;
   int16_t data5;
 
-  uint8_t activeMode;
-  uint8_t actuatorMode;
+  ActiveMode activeMode;
+  ActuatorMode actuatorMode;
 }inPayload;
 
 struct terminalRequestPayload {
@@ -81,7 +81,7 @@ byte customCharDotSel[8] = {
 
 uint64_t cycleStartTime, currentCycleTime;
 int16_t distL, distC, distR, lux, compassHeading; // lux = brightness
-bool readNotWrite, isListening;
+bool sendMessage, isListening;
 
 const byte headToWristAddr[6] = "00001";
 const byte wristToHeadAddr[6] = "00002";
@@ -95,7 +95,7 @@ LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars
 void setup() {
   distL = distC = distR = lux = compassHeading = 0;
 
-  activeMode = off;
+  activeMode = readAll;
   actuatorMode = vibration;
 
   Serial.begin(9600);
@@ -108,7 +108,7 @@ void setup() {
   radio.openWritingPipe(wristToHeadAddr);
   radio.openReadingPipe(0, headToWristAddr);
 
-  readNotWrite = true;
+  sendMessage = false;
   isListening = true;
   radio.startListening();
   cycleStartTime = millis();
@@ -135,7 +135,7 @@ void loop() {
 void communicate() {
   currentCycleTime = millis() - cycleStartTime;
 
-  if (readNotWrite) {
+  if (!sendMessage) {
     if(!isListening) {
       radio.startListening();
       cycleStartTime = millis();
@@ -161,7 +161,7 @@ void communicate() {
     } 
     
     else
-      readNotWrite = true;
+      sendMessage = true;
   }
 }
 

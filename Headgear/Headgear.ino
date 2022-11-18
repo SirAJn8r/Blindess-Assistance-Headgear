@@ -41,9 +41,10 @@
 
 // Photocell
 #define photocellPin A1 // pin for photocell sensor
-#define minBrightness 10
-#define maxBrightness 1000
-#define photocellMap(brightness) map(brightness, maxBrightness, minBrightness, 0, 255)
+#define minLux 10
+#define maxLux 1000
+#define withinLuxBounds(lux) ((lux < minLux ? minLux : lux) > maxLux ? maxLux : lux)
+#define photocellMap(lux) map(withinLuxBounds(lux), maxLux, minLux, 0, 255)
 
 // Compass
 #define compassAddr 0x20
@@ -137,14 +138,13 @@ void setup() {
   pinMode(rightBuz, OUTPUT);
   pinMode(photocell, INPUT);
 
-  Wire.begin();
   Serial.begin(9600);
-
-  // while(!mag.begin()) ; // wait for mag to come online
-  // mag.enableAutoRange(true);
-
-  while(!radio.begin()) Serial.println("failed comms wiring");
-  Serial.println("comms wiring valid");
+  while(!Wire.begin()) Serial.println("Cannot establish wire library");
+  while(!mag.begin()) Serial.println("Cannot connect to compass");
+  while(!radio.begin()) Serial.println("Cannot connect to radio");
+  Serial.println("Wire, Compass, and Radio connections made.");
+ 
+  mag.enableAutoRange(true);
 
   radio.setAutoAck(false); // append Ack packet
   radio.setDataRate(RF24_250KBPS); // transmission rate
@@ -174,15 +174,16 @@ void loop() {
     case compass: runCompass(); break;
   }
 
+  // Debugging
   Serial.print(" 1 ");
   Serial.print(distL);
-  Serial.print(" 2 ");
+  Serial.print(" | 2 ");
   Serial.print(distC);
-  Serial.print(" 3 ");
+  Serial.print(" | 3 ");
   Serial.print(distR);
-  Serial.print(" 4 ");
+  Serial.print(" | 4 ");
   Serial.print(compassHeading);
-  Serial.print(" 5 ");
+  Serial.print(" | 5 ");
   Serial.println(lux);
 }
 
@@ -193,7 +194,7 @@ void communicate() {
     // Delay so radio can start listening properly
   else if (currentCommCycleTime < commCycleListenTime) {
     if(radio.available() > 0)
-      sendOutPayload();
+      readInPayload();
   }
   else if (currentCommCycleTime < commCycleSendTime) {
     if(isListening) {    
@@ -306,7 +307,6 @@ void runCompass() {
  * For the vibration motors, adjusts their output by their custom modifier
  */
 void actuatorOutput(uint8_t output, actuatorSet actSet) {
-  //Serial.println(output);
   switch(actuatorMode) {
     case none:
       break;

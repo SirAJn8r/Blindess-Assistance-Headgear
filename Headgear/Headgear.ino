@@ -18,12 +18,14 @@
 #define leftBuz 6 // pin for left-side buzzer
 #define centerBuz 7 // pin for center buzzer
 #define rightBuz 8 // pin for right buzzer
-#define minBuz 100
-#define maxBuz 10000
-#define buzMap(val) map(val, 0, 255, minBuz, maxBuz)
 
 #define CE_PIN 9
 #define CSN_PIN 10
+
+// Buzzers
+#define minBuz 100
+#define maxBuz 10000
+#define buzMap(val) map(val, 0, 255, minBuz, maxBuz)
 
 // Focus on distance(s) that are much closer than the other distance(s)
 #define closeFactor 0.5
@@ -39,10 +41,9 @@
 
 // Photocell
 #define photocellPin A1 // pin for photocell sensor
-#define minLux 10
-#define maxLux 1000
-#define withinLuxBounds(lux) ((lux < minLux ? minLux : lux) > maxLux ? maxLux : lux)
-#define photocellMap(lux) map(withinLuxBounds(lux), minLux, maxLux, 0, 255)
+#define minLux 100
+#define maxLux 800
+#define photocellMap(lux) map(lux, minLux, maxLux, 0, 255)
 
 // Compass
 #define compassAddr 0x20
@@ -53,11 +54,6 @@
 #define commCycleListenDelay 50
 #define commCycleListenTime 100 // 50 + listenDelay
 #define commCycleSendTime 500 // 400 + listenTime + listenDelay
-
-#define activeModeSize 4
-#define actuatorModeSize 4
-#define validActiveMode(n) (n >= 0 && n < activeModeSize)
-#define validActuatorMode(n) (n >= 0 && n < actuatorModeSize)
 
 enum ActiveMode{
   readAll = 0,
@@ -91,8 +87,8 @@ struct sensorPayload {
 }outPayload;
 
 struct terminalRequestPayload {
-  uint8_t activeMode; // set/update the active mode
-  uint8_t actuatorMode; // set/update the actuator mode
+  ActiveMode activeMode; // set/update the active mode
+  ActuatorMode actuatorMode; // set/update the actuator mode
 }inPayload;
 
 uint64_t currentDataCycleTime, startDataTime, currentCommCycleTime, startListeningTime;
@@ -142,8 +138,8 @@ void setup() {
   mag.enableAutoRange(true);
 
   radio.setAutoAck(false); // append Ack packet
-  radio.setDataRate(RF24_250KBPS); // transmission rate
-  radio.setPALevel(RF24_PA_LOW); // distance and energy consump.
+  radio.setDataRate(RF24_2MBPS); // transmission rate
+  radio.setPALevel(RF24_PA_MAX); // distance and energy consump.
   radio.openWritingPipe(headToWristAddr);
   radio.openReadingPipe(0, wristToHeadAddr);
 
@@ -181,7 +177,6 @@ void communicate() {
   if (currentCommCycleTime < commCycleListenDelay) ;
     // Delay so radio can start listening properly
   else if (currentCommCycleTime < commCycleListenTime) {
-    Serial.print(" Listening ");
     if(radio.available() > 0)
       readInPayload();
   }
@@ -202,10 +197,8 @@ void communicate() {
 void readInPayload() {
   radio.read(&inPayload, sizeof(inPayload));
 
-  if(validActiveMode(inPayload.activeMode))
-    activeMode = inPayload.activeMode;
-  if(validActuatorMode(inPayload.actuatorMode))
-    actuatorMode = inPayload.actuatorMode;
+  activeMode = inPayload.activeMode;
+  actuatorMode = inPayload.actuatorMode;
 
   // Debugging
   Serial.print("Set active mode to ");
@@ -284,7 +277,12 @@ void runDistance() {
 }
 
 void runPhotocell() {
+  int16_t tempLux;
+
   lux = analogRead(photocellPin);
+  tempLux = lux < minLux ? minLux : lux;
+  tempLux = tempLux > maxLux ? maxLux : tempLux;
+
   actuatorOutput(0, leftSet);
   actuatorOutput(photocellMap(lux), centerSet);
   actuatorOutput(0, rightSet);

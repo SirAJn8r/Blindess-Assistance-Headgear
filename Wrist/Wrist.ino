@@ -79,7 +79,7 @@ byte customCharDotSel[8] = {
   0b00000
 };
 
-uint64_t cycleStartTime, currentCycleTime, tempTime;
+uint64_t cycleStartTime, currentCycleTime;
 int16_t distL, distC, distR, lux, compassHeading; // lux = brightness
 bool sendMessage, isListening;
 
@@ -119,8 +119,6 @@ void setup() {
   lcd.createChar(1, customCharDotSel);
   lcd.createChar(2, backSlash);
   lcd.setCursor(3, 0);
-
-  tempTime = millis();
 }
 
 void loop() {
@@ -131,12 +129,6 @@ void loop() {
     case 1: printLidar(); break;
     case 2: printPhotoCell(); break;
     case 3: printCompass(); break;
-  }
-
-  if(millis() - tempTime > 8000) {
-    lcd.clear();
-    activeMode = (activeMode + 1) % 4;
-    tempTime = millis();
   }
 }
 

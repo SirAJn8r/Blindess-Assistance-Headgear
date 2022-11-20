@@ -41,8 +41,8 @@
 
 // Photocell
 #define photocellPin A1 // pin for photocell sensor
-#define minLux 100
-#define maxLux 800
+#define minLux 0
+#define maxLux 900
 #define photocellMap(lux) map(lux, minLux, maxLux, 0, 255)
 
 // Compass

@@ -6,7 +6,7 @@
 #define CE_PIN 7
 #define CSN_PIN 8
 #define listenDelay 50
-#define sendTime 600
+#define sendTime 700
 
 // Printing info
 #define cs 3 // compass shift
@@ -79,7 +79,8 @@ byte customCharDotSel[8] = {
   0b00000
 };
 
-uint64_t cycleStartTime, currentCycleTime;
+uint64_t cycleStartTime, currentCycleTime, messageCountTimer, lastSentTime;
+uint32_t recvMessageCount;
 int16_t distL, distC, distR, lux, compassHeading; // lux = brightness
 bool sendMessage, isListening;
 
@@ -102,7 +103,7 @@ void setup() {
   while(!radio.begin()) Serial.println("Could not connect to radio");
   Serial.println("Everything connected");
 
-  radio.setAutoAck(false); // append Ack packet
+  radio.setAutoAck(true); // append Ack packet
   radio.setDataRate(RF24_2MBPS); // transmission rate
   radio.setPALevel(RF24_PA_MAX); // distance and energy consump.
   radio.openWritingPipe(wristToHeadAddr);
@@ -111,7 +112,8 @@ void setup() {
   sendMessage = false;
   isListening = true;
   radio.startListening();
-  cycleStartTime = millis();
+  cycleStartTime = messageCountTimer = lastSentTime = millis();
+  recvMessageCount = 0;
 
   lcd.init();
   lcd.backlight();
@@ -134,6 +136,9 @@ void loop() {
 
 void communicate() {
   currentCycleTime = millis() - cycleStartTime;
+
+  if(currentCycleTime > 3000)
+    sendMessage = true;
 
   if (!sendMessage) {
     if(!isListening) {
@@ -158,10 +163,23 @@ void communicate() {
       outPayload.activeMode = activeMode;
       outPayload.actuatorMode = actuatorMode;
       radio.write(&outPayload, sizeof(outPayload));
+      lastSentTime = millis();
     } 
     
     else
       sendMessage = false;
+  }
+
+  // Debug info
+  currentCycleTime = millis();
+  Serial.print("Received Per Second = ");
+  Serial.print(recvMessageCount * 1000 / (uint32_t)(currentCycleTime - messageCountTimer));
+  Serial.print("  |  Last Sent Seconds Ago = ");
+  Serial.println((uint32_t)(currentCycleTime - lastSentTime) / 1000);
+  
+  if(currentCycleTime - messageCountTimer > 3000) {
+    recvMessageCount = 0;
+    messageCountTimer = millis();
   }
 }
 
@@ -174,18 +192,7 @@ void readInPayload() {
   compassHeading = inPayload.compassHeading;
   lux = inPayload.lux;
 
-  /* // Debugging
-  Serial.print("l Data is ");
-  Serial.print(distL);
-  Serial.print("  c Data is ");
-  Serial.print(distC);
-  Serial.print("  r Data is ");
-  Serial.print(distR);
-  Serial.print("  lux is ");
-  Serial.print(lux);
-  Serial.print("  compassHeading is ");
-  Serial.println(compassHeading);
-  */
+  recvMessageCount++;
 }
 
 void printAll() {

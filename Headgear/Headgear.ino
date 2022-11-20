@@ -52,8 +52,8 @@
 
 //Communication
 #define commCycleListenDelay 50
-#define commCycleListenTime 100 // 50 + listenDelay
-#define commCycleSendTime 500 // 400 + listenTime + listenDelay
+#define commCycleListenTime 150 // 100 + listenDelay
+#define commCycleSendTime 600 // 450 + listenTime + listenDelay
 
 enum ActiveMode{
   readAll = 0,
@@ -91,7 +91,8 @@ struct terminalRequestPayload {
   ActuatorMode actuatorMode; // set/update the actuator mode
 }inPayload;
 
-uint64_t currentDataCycleTime, startDataTime, currentCommCycleTime, startListeningTime;
+uint64_t currentCommCycleTime, startListeningTime, messageCountTimer, lastRecvTime;
+uint32_t sentMessageCount;
 sensors_event_t compassData;
 int16_t distL, distC, distR, lux, compassHeading; // lux = brightness
 bool isListening;
@@ -137,7 +138,7 @@ void setup() {
  
   mag.enableAutoRange(true);
 
-  radio.setAutoAck(false); // append Ack packet
+  radio.setAutoAck(true); // append Ack packet
   radio.setDataRate(RF24_2MBPS); // transmission rate
   radio.setPALevel(RF24_PA_MAX); // distance and energy consump.
   radio.openWritingPipe(headToWristAddr);
@@ -145,7 +146,8 @@ void setup() {
 
   isListening = true;
   radio.startListening();
-  startDataTime = startListeningTime = millis();
+  startListeningTime = messageCountTimer = lastRecvTime = millis();
+  sentMessageCount = 0;
 }
 
 void loop() {
@@ -158,6 +160,7 @@ void loop() {
     case compass: runCompass(); break;
   }
 
+  /*
   // Debugging
   Serial.print(" 1 ");
   Serial.print(distL);
@@ -169,6 +172,7 @@ void loop() {
   Serial.print(compassHeading);
   Serial.print(" | 5 ");
   Serial.println(lux);
+  */
 }
 
 void communicate() {
@@ -192,6 +196,18 @@ void communicate() {
     radio.startListening();
     startListeningTime = millis();    
   }
+
+  // Debug info
+  currentCommCycleTime = millis();
+  Serial.print("Last Recv Seconds Ago = ");
+  Serial.print((uint32_t)(currentCommCycleTime - lastRecvTime) / 1000);
+  Serial.print("  |  Sent Per Second = ");
+  Serial.println(sentMessageCount * 1000 / (uint32_t)(currentCommCycleTime - messageCountTimer));
+  
+  if(currentCommCycleTime - messageCountTimer > 3000) {
+    sentMessageCount = 0;
+    messageCountTimer = millis();
+  }
 }
 
 void readInPayload() {
@@ -200,11 +216,15 @@ void readInPayload() {
   activeMode = inPayload.activeMode;
   actuatorMode = inPayload.actuatorMode;
 
+  lastRecvTime = millis();
+
+  /*
   // Debugging
   Serial.print("Set active mode to ");
   Serial.println(inPayload.activeMode);
   Serial.print("Set actuator mode to ");
   Serial.println(inPayload.actuatorMode);
+  */
 }
 
 void sendOutPayload() {
@@ -215,6 +235,8 @@ void sendOutPayload() {
   outPayload.lux = lux;
   
   radio.write(&outPayload, sizeof(outPayload));
+
+  sentMessageCount++;
 }
 
 void readAllSensors() {
@@ -225,18 +247,10 @@ void readAllSensors() {
   compassHeading = round(atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI) + compassAdjust;
 }
 
-void readDistance() {
-  currentDataCycleTime = millis() - startDataTime;
-
-  // Collect distance data only from whoever's turn it is
-  if (currentDataCycleTime > 150)
-    startDataTime = millis();
-  else if (currentDataCycleTime > 100)
-    tfl.getData(distL, leftTFL);   
-  else if (currentDataCycleTime > 50)
-    tfl.getData(distC, centerTFL);
-  else
-    tfl.getData(distR, rightTFL);
+void readDistance() { 
+  tfl.getData(distL, leftTFL);   
+  tfl.getData(distC, centerTFL);
+  tfl.getData(distR, rightTFL);
 }
 
 void runDistance() {

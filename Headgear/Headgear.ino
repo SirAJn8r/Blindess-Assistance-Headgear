@@ -7,6 +7,8 @@
 #include "nRF24L01.h"
 #include "SPI.h"
 
+#define _DEBUG_VALUES false
+
 #define leftTFL 0x12 // I2C address of left TF-Luna
 #define centerTFL 0x11 // I2C address of center TF-Luna
 #define rightTFL 0x10 // I2C address of right TF-Luna
@@ -151,17 +153,17 @@ void setup() {
 }
 
 void loop() {
+  readAllSensors(); 
   communicate();
 
   switch(activeMode) {
-    case readAll: readAllSensors(); break;
+    case readAll: break; // reads all anyways
     case distance: runDistance(); break;
     case photocell: runPhotocell(); break;
     case compass: runCompass(); break;
   }
-
-  /*
-  // Debugging
+  
+  #if _DEBUG_VALUES
   Serial.print(" 1 ");
   Serial.print(distL);
   Serial.print(" | 2 ");
@@ -172,7 +174,7 @@ void loop() {
   Serial.print(compassHeading);
   Serial.print(" | 5 ");
   Serial.println(lux);
-  */
+  #endif
 }
 
 void communicate() {
@@ -240,22 +242,17 @@ void sendOutPayload() {
 }
 
 void readAllSensors() {
-  readDistance();
+  tfl.getData(distL, leftTFL);   
+  tfl.getData(distC, centerTFL);
+  tfl.getData(distR, rightTFL);
+
   lux = analogRead(photocellPin);
   
   mag.getEvent(&compassData);
   compassHeading = round(atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI) + compassAdjust;
 }
 
-void readDistance() { 
-  tfl.getData(distL, leftTFL);   
-  tfl.getData(distC, centerTFL);
-  tfl.getData(distR, rightTFL);
-}
-
 void runDistance() {
-  readDistance();
-
   // If one is way closer than the other two, focus on it exclusively
   if (singleClose(distL, distC, distR)) {
     actuatorOutput(bucketMap(distL), leftSet);   
@@ -288,12 +285,16 @@ void runDistance() {
     actuatorOutput(bucketMap(distC), centerSet);    
     actuatorOutput(0, rightSet);
   }
+  // If they're comparable 
+  else {
+    actuatorOutput(bucketMap(distL), leftSet);   
+    actuatorOutput(bucketMap(distC), centerSet);    
+    actuatorOutput(bucketMap(distR), rightSet);
+  }
 }
 
 void runPhotocell() {
   int16_t tempLux;
-
-  lux = analogRead(photocellPin);
   tempLux = lux < minLux ? minLux : lux;
   tempLux = tempLux > maxLux ? maxLux : tempLux;
 
@@ -303,9 +304,6 @@ void runPhotocell() {
 }
 
 void runCompass() {
-  mag.getEvent(&compassData);
-  compassHeading = round(atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI) + compassAdjust;
-
   if(compassHeading < northBound && compassHeading > -northBound) {
     actuatorOutput(0, leftSet);
     actuatorOutput(255, centerSet);

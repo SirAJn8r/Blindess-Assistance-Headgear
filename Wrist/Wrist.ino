@@ -3,6 +3,11 @@
 #include "SPI.h"
 #include <LiquidCrystal_I2C.h>
 
+#define button1 6
+#define button2 5
+#define button3 4
+#define debounceTime 300
+
 #define CE_PIN 7
 #define CSN_PIN 8
 #define listenDelay 50
@@ -79,7 +84,7 @@ byte customCharDotSel[8] = {
   0b00000
 };
 
-uint64_t cycleStartTime, currentCycleTime, messageCountTimer, lastSentTime;
+uint64_t cycleStartTime, messageCountTimer, lastSentTime, lastButtonUseTime;
 uint32_t recvMessageCount;
 int16_t distL, distC, distR, lux, compassHeading; // lux = brightness
 bool sendMessage, isListening;
@@ -112,7 +117,10 @@ void setup() {
   sendMessage = false;
   isListening = true;
   radio.startListening();
-  cycleStartTime = messageCountTimer = lastSentTime = millis();
+  cycleStartTime = millis();
+  messageCountTimer = cycleStartTime;
+  lastSentTime = cycleStartTime;
+  lastButtonUseTime = cycleStartTime;
   recvMessageCount = 0;
 
   lcd.init();
@@ -121,9 +129,14 @@ void setup() {
   lcd.createChar(1, customCharDotSel);
   lcd.createChar(2, backSlash);
   lcd.setCursor(3, 0);
+
+  pinMode(button1, INPUT_PULLUP);
+  pinMode(button2, INPUT_PULLUP);
+  pinMode(button3, INPUT_PULLUP);
 }
 
 void loop() {
+  checkButtons();
   communicate();
 
   switch(activeMode) {
@@ -134,8 +147,29 @@ void loop() {
   }
 }
 
+void checkButtons() {
+  uint64_t timeSinceButton = millis() - lastButtonUseTime;
+  if(timeSinceButton > debounceTime) {
+    if(digitalRead(button1) == HIGH) {
+      activeMode = (activeMode + 1) % 4;
+      sendMessage = true;
+      lastButtonUseTime = millis();
+    }
+    else if(digitalRead(button2) == HIGH) {
+      actuatorMode = (actuatorMode + 1) % 4;
+      sendMessage = true;
+      lastButtonUseTime = millis();    
+    } 
+    else if(digitalRead(button3) == HIGH) {
+      // maybe modify settings?
+      sendMessage = true;
+      lastButtonUseTime = millis();    
+    }
+  }
+}
+
 void communicate() {
-  currentCycleTime = millis() - cycleStartTime;
+  uint64_t currentCycleTime = millis() - cycleStartTime;
 
   if(currentCycleTime > 3000)
     sendMessage = true;

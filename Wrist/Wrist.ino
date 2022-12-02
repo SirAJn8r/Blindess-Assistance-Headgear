@@ -151,17 +151,17 @@ void checkButtons() {
   uint64_t timeSinceButton = millis() - lastButtonUseTime;
 
   if(timeSinceButton > debounceTime) {
-    if(digitalRead(button1) == HIGH) {
+    if(digitalRead(button1) == LOW) {
       activeMode = (activeMode + 1) % 4;
       sendMessage = true;
       lastButtonUseTime = millis();
     }
-    if(digitalRead(button2) == HIGH) {
+    if(digitalRead(button2) == LOW) {
       actuatorMode = (actuatorMode + 1) % 4;
       sendMessage = true;
       lastButtonUseTime = millis();    
     } 
-    if(digitalRead(button3) == HIGH) {
+    if(digitalRead(button3) == LOW) {
       // maybe modify settings?
       sendMessage = true;
       lastButtonUseTime = millis();    

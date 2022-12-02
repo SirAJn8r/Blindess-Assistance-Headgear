@@ -149,18 +149,19 @@ void loop() {
 
 void checkButtons() {
   uint64_t timeSinceButton = millis() - lastButtonUseTime;
+
   if(timeSinceButton > debounceTime) {
     if(digitalRead(button1) == HIGH) {
       activeMode = (activeMode + 1) % 4;
       sendMessage = true;
       lastButtonUseTime = millis();
     }
-    else if(digitalRead(button2) == HIGH) {
+    if(digitalRead(button2) == HIGH) {
       actuatorMode = (actuatorMode + 1) % 4;
       sendMessage = true;
       lastButtonUseTime = millis();    
     } 
-    else if(digitalRead(button3) == HIGH) {
+    if(digitalRead(button3) == HIGH) {
       // maybe modify settings?
       sendMessage = true;
       lastButtonUseTime = millis();    

@@ -7,7 +7,7 @@
 #include "nRF24L01.h"
 #include "SPI.h"
 
-#define _DEBUG_VALUES false
+#define _DEBUG_VALUES true
 
 #define leftTFL 0x12 // I2C address of left TF-Luna
 #define centerTFL 0x11 // I2C address of center TF-Luna
@@ -215,14 +215,14 @@ void communicate() {
 void readInPayload() {
   radio.read(&inPayload, sizeof(inPayload));
 
-  if(actuatorMode != inPayload.actuatorMode) {
+  activeMode = inPayload.activeMode;
+  actuatorMode = inPayload.actuatorMode;
+
+  if(activeMode == readAll) {
     actuatorOutput(0, leftSet);
     actuatorOutput(0, centerSet);
     actuatorOutput(0, rightSet);
   }
-
-  activeMode = inPayload.activeMode;
-  actuatorMode = inPayload.actuatorMode;
 
   lastRecvTime = millis();
 
@@ -328,11 +328,15 @@ void runCompass() {
 void actuatorOutput(uint8_t output, actuatorSet actSet) {
   switch(actuatorMode) {
     case none:
+      analogWrite(actSet.vib, 0);
+      tone(actSet.buz, 0);
       break;
     case vibration:
       analogWrite(actSet.vib, output);
+      tone(actSet.buz, 0);
       break;
     case buzzer:
+      analogWrite(actSet.vib, 0);
       tone(actSet.buz, buzMap(output));
       break;
     case all:

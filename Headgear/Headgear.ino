@@ -17,17 +17,17 @@
 #define centerVib 4 // pin for center vibration motor
 #define rightVib 5 // pin for right vibration motor
 
-#define leftBuz 6 // pin for left-side buzzer
-#define centerBuz 7 // pin for center buzzer
-#define rightBuz 8 // pin for right buzzer
+#define leftBuz 34 // pin for left-side buzzer
+#define centerBuz 32 // pin for center buzzer
+#define rightBuz 30 // pin for right buzzer
 
 #define CE_PIN 9
 #define CSN_PIN 10
 
 // Buzzers
 #define minBuz 100
-#define maxBuz 10000
-#define buzMap(val) map(val, 0, 255, minBuz, maxBuz)
+#define maxBuz 1000
+#define buzMap(val) map(val >> 4, 0, 15, minBuz, maxBuz)
 
 // Focus on distance(s) that are much closer than the other distance(s)
 #define closeFactor 0.5
@@ -56,6 +56,7 @@
 #define commCycleListenDelay 50
 #define commCycleListenTime 150 // 100 + listenDelay
 #define commCycleSendTime 600 // 450 + listenTime + listenDelay
+#define changeModeBuzzerTime 500 // length of time for outputing when active mode changes
 
 enum ActiveMode{
   readAll = 0,
@@ -93,11 +94,11 @@ struct terminalRequestPayload {
   ActuatorMode actuatorMode; // set/update the actuator mode
 }inPayload;
 
-uint64_t currentCommCycleTime, startListeningTime, messageCountTimer, lastRecvTime;
+uint64_t currentCommCycleTime, startListeningTime, messageCountTimer, lastRecvTime, startChangeModeBuzzer;
 uint32_t sentMessageCount;
 sensors_event_t compassData;
 int16_t distL, distC, distR, lux, compassHeading; // lux = brightness
-bool isListening;
+bool isListening, changeModeBuzzer;
 
 const byte headToWristAddr[6] = "00001";
 const byte wristToHeadAddr[6] = "00002";
@@ -148,7 +149,8 @@ void setup() {
 
   isListening = true;
   radio.startListening();
-  startListeningTime = messageCountTimer = lastRecvTime = millis();
+  startListeningTime = messageCountTimer = lastRecvTime = startChangeModeBuzzer = millis();
+  tone(centerBuz, map(inPayload.activeMode, 0, 3, 100, 400));
   sentMessageCount = 0;
 }
 
@@ -156,11 +158,18 @@ void loop() {
   readAllSensors(); 
   communicate();
 
-  switch(activeMode) {
-    case readAll: break; // reads all anyways
-    case distance: runDistance(); break;
-    case photocell: runPhotocell(); break;
-    case compass: runCompass(); break;
+  if(changeModeBuzzer) {
+    if(millis() > startChangeModeBuzzer + changeModeBuzzerTime) {
+      changeModeBuzzer = false;
+      noTone(centerBuz);
+    }
+  } else {
+    switch(activeMode) {
+      case readAll: setToZero(); break; // reads all anyways
+      case distance: runDistance(); break;
+      case photocell: runPhotocell(); break;
+      case compass: runCompass(); break;
+    }
   }
   
   #if _DEBUG_VALUES
@@ -173,7 +182,13 @@ void loop() {
   Serial.print(" | 4 ");
   Serial.print(compassHeading);
   Serial.print(" | 5 ");
-  Serial.println(lux);
+  Serial.print(lux);
+  Serial.print("    ");
+
+  Serial.print(activeMode);
+  Serial.print("  ");
+  Serial.print(actuatorMode);
+  Serial.print("    ");
   #endif
 }
 
@@ -215,14 +230,14 @@ void communicate() {
 void readInPayload() {
   radio.read(&inPayload, sizeof(inPayload));
 
+  if(activeMode != inPayload.activeMode) {
+    tone(centerBuz, map(inPayload.activeMode, 0, 3, 150, 300));
+    changeModeBuzzer = true;
+    startChangeModeBuzzer = millis();
+  }
+
   activeMode = inPayload.activeMode;
   actuatorMode = inPayload.actuatorMode;
-
-  if(activeMode == readAll) {
-    actuatorOutput(0, leftSet);
-    actuatorOutput(0, centerSet);
-    actuatorOutput(0, rightSet);
-  }
 
   lastRecvTime = millis();
 
@@ -255,6 +270,12 @@ void readAllSensors() {
   
   mag.getEvent(&compassData);
   compassHeading = round(atan2(compassData.magnetic.y, compassData.magnetic.x) * 180 / PI) + compassAdjust;
+}
+
+void setToZero() {
+  actuatorOutput(0, leftSet);
+  actuatorOutput(0, centerSet);
+  actuatorOutput(0, rightSet);
 }
 
 void runDistance() {
@@ -314,11 +335,11 @@ void runCompass() {
     actuatorOutput(255, centerSet);
     actuatorOutput(0, rightSet);
   } else {
-    // if north is left, then left output 255, right 0. Else, vice versa
-    uint8_t northIsLeft = compassHeading < 0 ? 255 : 0;
-    actuatorOutput(northIsLeft, leftSet);
+    uint8_t northLeft = compassHeading < 0 ? map(compassHeading, -180, 0, 0, 255) : 0;
+    uint8_t northRight = compassHeading > 0 ? map(compassHeading, 180, 0, 0, 255) : 0;
+    actuatorOutput(northLeft, leftSet);
     actuatorOutput(0, centerSet);
-    actuatorOutput(255 - northIsLeft, rightSet);
+    actuatorOutput(northRight, rightSet);
   }
 }
 
@@ -329,19 +350,25 @@ void actuatorOutput(uint8_t output, actuatorSet actSet) {
   switch(actuatorMode) {
     case none:
       analogWrite(actSet.vib, 0);
-      tone(actSet.buz, 0);
+      noTone(actSet.buz);
       break;
     case vibration:
       analogWrite(actSet.vib, output);
-      tone(actSet.buz, 0);
+      noTone(actSet.buz);
       break;
     case buzzer:
       analogWrite(actSet.vib, 0);
-      tone(actSet.buz, buzMap(output));
+      if(output == 0)
+        noTone(actSet.buz);
+      else
+        tone(actSet.buz, buzMap(output));
       break;
     case all:
       analogWrite(actSet.vib, output);
-      tone(actSet.buz, buzMap(output));
+      if(output == 0)
+        noTone(actSet.buz);
+      else
+        tone(actSet.buz, buzMap(output));
       break;
   }
 }

@@ -82,6 +82,9 @@ byte customCharDotSel[8] = {
   0b11111,
   0b00000
 };
+char actuatorModeChar[4] = {
+  'N', 'V', 'B', 'A'
+};
 
 uint64_t cycleStartTime, messageCountTimer, lastSentTime, lastButtonUseTime;
 uint32_t recvMessageCount;
@@ -153,11 +156,13 @@ void checkButtons() {
       activeMode = (activeMode + 1) % 4;
       sendMessage = true;
       lastButtonUseTime = millis();
+      lcd.clear();
     }
     if(digitalRead(button2) == LOW) {
       actuatorMode = (actuatorMode + 1) % 4;
       sendMessage = true;
       lastButtonUseTime = millis();    
+      lcd.clear();
     }
   }
 }
@@ -269,11 +274,13 @@ void printAll() {
   lcd.print(degreeChar);
   lcd.print("  ");
   
-  lcd.setCursor(15, 3);
+  lcd.setCursor(14, 3);
   lcd.print(hollowDotChar);
   lcd.print(solidDotChar);
   lcd.print(solidDotChar);
   lcd.print(solidDotChar);
+  lcd.print(' ');
+  lcd.print(actuatorModeChar[actuatorMode]);
 }
 
 void printPhotoCell() {
@@ -294,11 +301,13 @@ void printPhotoCell() {
   for (i = bars ; i <= 9; i++) lcd.print(" ");
   lcd.print("|");
 
-  lcd.setCursor(15, 3);
-  lcd.print(solidDotChar);
+  lcd.setCursor(14, 3);
   lcd.print(solidDotChar);
   lcd.print(solidDotChar);
   lcd.print(hollowDotChar);
+  lcd.print(solidDotChar);
+  lcd.print(' ');
+  lcd.print(actuatorModeChar[actuatorMode]);
 }
 
 void printLidar() {
@@ -355,11 +364,13 @@ void printLidar() {
     }
   }
 
-  lcd.setCursor(15, 3);
+  lcd.setCursor(14, 3);
   lcd.print(solidDotChar);
   lcd.print(hollowDotChar);
   lcd.print(solidDotChar);
   lcd.print(solidDotChar);
+  lcd.print(' ');
+  lcd.print(actuatorModeChar[actuatorMode]);
 }
 
 int16_t getDistBucket4(int16_t dist){
@@ -472,11 +483,13 @@ void printCompass() {
     lcd.print("   ");
   }
 
-  lcd.setCursor(15, 3);
+  lcd.setCursor(14, 3);
+  lcd.print(solidDotChar);
   lcd.print(solidDotChar);
   lcd.print(solidDotChar);
   lcd.print(hollowDotChar);
-  lcd.print(solidDotChar);
+  lcd.print(' ');
+  lcd.print(actuatorModeChar[actuatorMode]);
 }
 
 void printCompassOutline() {

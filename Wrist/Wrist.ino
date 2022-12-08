@@ -5,7 +5,6 @@
 
 #define button1 6
 #define button2 5
-#define button3 4
 #define debounceTime 300
 
 #define CE_PIN 7
@@ -132,7 +131,6 @@ void setup() {
 
   pinMode(button1, INPUT_PULLUP);
   pinMode(button2, INPUT_PULLUP);
-  pinMode(button3, INPUT_PULLUP);
 }
 
 void loop() {
@@ -158,11 +156,6 @@ void checkButtons() {
     }
     if(digitalRead(button2) == LOW) {
       actuatorMode = (actuatorMode + 1) % 4;
-      sendMessage = true;
-      lastButtonUseTime = millis();    
-    } 
-    if(digitalRead(button3) == LOW) {
-      // maybe modify settings?
       sendMessage = true;
       lastButtonUseTime = millis();    
     }

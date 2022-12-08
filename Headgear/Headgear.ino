@@ -215,18 +215,23 @@ void communicate() {
 void readInPayload() {
   radio.read(&inPayload, sizeof(inPayload));
 
+  if(actuatorMode != inPayload.actuatorMode) {
+    actuatorOutput(0, leftSet);
+    actuatorOutput(0, centerSet);
+    actuatorOutput(0, rightSet);
+  }
+
   activeMode = inPayload.activeMode;
   actuatorMode = inPayload.actuatorMode;
 
   lastRecvTime = millis();
 
-  /*
-  // Debugging
+  #if _DEBUG_VALUES
   Serial.print("Set active mode to ");
   Serial.println(inPayload.activeMode);
   Serial.print("Set actuator mode to ");
   Serial.println(inPayload.actuatorMode);
-  */
+  #endif
 }
 
 void sendOutPayload() {

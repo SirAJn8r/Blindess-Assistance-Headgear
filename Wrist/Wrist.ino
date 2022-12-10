@@ -335,6 +335,7 @@ void printLidar() {
   //middle wall
   b = getDistBucket4(distC);
   row = 2 - b;
+  if (row < 0) row = 0;
   if (row >= 0) {
     lcd.setCursor(9, row);
     lcd.print("_");
@@ -374,10 +375,10 @@ void printLidar() {
 }
 
 int16_t getDistBucket4(int16_t dist){
-  if (dist < 50) return 0;
-  if (dist < 100) return 1;
-  if (dist < 200) return 2;
-  if (dist < 300) return 3;
+  if (dist <= 50) return 0;
+  if (dist <= 100) return 1;
+  if (dist <= 200) return 2;
+  if (dist <= 300) return 3;
   return 4;
 }
 
